@@ -2,7 +2,7 @@
  * Aura Climate Card – Raumklima, Schimmelrisiko & Lüftungsempfehlung für Home Assistant
  * MIT © muhkuh666 – https://github.com/muhkuh666/Aura-Climate-Card
  */
-const AURA_VERSION = "1.4.0";
+const AURA_VERSION = "1.5.0";
 
 /* ------------------------------------------------------------------ */
 /*  Texte                                                              */
@@ -65,6 +65,10 @@ const AURA_I18N = {
     r_co2_est: "CO₂ geschätzt über {v} ppm",
     wall_learned: "gelernt · {n} Messung|gelernt · {n} Messungen",
     wl_title: "Wandpunkt messen",
+    th_title: "Thermostate",
+    th_count: "{n} Thermostate",
+    th_heating: "{n} heizt|{n} heizen",
+    th_off: "aus",
     wl_hint: "Kälteste Stelle (Außenwandecke, Fensterlaibung, hinter Schrank) mit IR-Thermometer messen und Wert eintragen. Am besten an kalten Tagen.",
     wl_input: "Gemessene Wandtemperatur (°C)",
     wl_save: "Übernehmen",
@@ -164,6 +168,10 @@ const AURA_I18N = {
     r_co2_est: "CO₂ estimated above {v} ppm",
     wall_learned: "learned · {n} measurement|learned · {n} measurements",
     wl_title: "Measure wall spot",
+    th_title: "Thermostats",
+    th_count: "{n} thermostats",
+    th_heating: "{n} heating|{n} heating",
+    th_off: "off",
     wl_hint: "Measure the coldest spot (outer wall corner, window reveal, behind a wardrobe) with an IR thermometer and enter the value. Best on cold days.",
     wl_input: "Measured wall temperature (°C)",
     wl_save: "Apply",
@@ -342,6 +350,9 @@ const AQ = {
 /* ------------------------------------------------------------------ */
 const esc = (s) =>
   String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+// Einzelwert oder Liste → Liste (z. B. mehrere Thermostate pro Raum)
+const toList = (v) => (Array.isArray(v) ? v : v ? [v] : []).filter((x) => typeof x === "string" && x);
 
 const toColor = (v, fb) => {
   if (Array.isArray(v) && v.length === 3) return `rgb(${v.join(",")})`;
@@ -731,10 +742,29 @@ class AuraClimateCard extends HTMLElement {
       if (a.aqOnlyEst && a.aqLevel === "alarm") a.aqLevel = "warn";
     }
     a.moldSensor = this._num(room.mold);
-    const climate = this._st(room.climate);
-    a.target = climate?.attributes?.temperature ?? (room.target_temperature != null ? Number(room.target_temperature) : null);
-    a.heating =
-      !!climate && (climate.attributes?.hvac_action === "heating" || (climate.attributes?.hvac_action == null && climate.state === "heat"));
+    // Thermostate (eins oder mehrere)
+    a.climates = toList(room.climate)
+      .map((id) => this._st(id))
+      .filter(Boolean)
+      .map((st) => {
+        const at = st.attributes || {};
+        const heating = at.hvac_action === "heating" || (at.hvac_action == null && st.state === "heat");
+        const tg = at.temperature ?? at.target_temp_low ?? null;
+        return {
+          id: st.entity_id,
+          name: at.friendly_name || st.entity_id,
+          target: tg != null && isFinite(Number(tg)) ? Number(tg) : null,
+          current: at.current_temperature != null ? Number(at.current_temperature) : null,
+          off: st.state === "off",
+          heating,
+        };
+      });
+    const tg = a.climates.filter((x) => !x.off && x.target != null).map((x) => x.target);
+    a.targetMin = tg.length ? Math.min(...tg) : null;
+    a.targetMax = tg.length ? Math.max(...tg) : null;
+    a.target = tg.length ? tg.reduce((x, y) => x + y, 0) / tg.length : room.target_temperature != null ? Number(room.target_temperature) : null;
+    a.heatingCount = a.climates.filter((x) => x.heating).length;
+    a.heating = a.heatingCount > 0;
     const w = this._st(room.window);
     a.hasWindow = !!w;
     a.windowOpen = !!w && ["on", "open", "opening", "tilted", "true"].includes(String(w.state).toLowerCase());
@@ -956,13 +986,13 @@ class AuraClimateCard extends HTMLElement {
     }
     const c = this._config;
     const ids = [c.outdoor_temperature, c.outdoor_humidity];
-    this._rooms.forEach((r) => ids.push(r.temperature, r.humidity, r.window, r.co2, r.wall_temperature, r.mold, r.climate, r.voc, r.pm25, r.pm10, r.presence, r.wall_learn));
+    this._rooms.forEach((r) => ids.push(r.temperature, r.humidity, r.window, r.co2, r.wall_temperature, r.mold, ...toList(r.climate), r.voc, r.pm25, r.pm10, r.presence, r.wall_learn));
     const sig = ids
       .map((i) => {
         const s = this._st(i);
         return s ? s.state + "|" + (s.attributes?.temperature ?? "") + "|" + (s.attributes?.hvac_action ?? "") + "|" + s.last_changed : "";
       })
-      .join(";") + `#${this._sel}#${this._detail}#${this._lang}#${this._wallPanel}#${this._wallMsg?.text || ""}`;
+      .join(";") + `#${this._sel}#${this._detail}#${this._lang}#${this._wallPanel}#${this._climPanel}#${this._wallMsg?.text || ""}`;
     if (sig === this._sig) return;
     this._sig = sig;
     this._render();
@@ -1191,8 +1221,16 @@ class AuraClimateCard extends HTMLElement {
         k: "show_target",
         ic: a.heating ? "flame" : "target",
         label: this._t("target"),
-        val: `${this._n(a.target, this._dT)} °C`,
-        ent: r.climate,
+        val:
+          a.targetMin != null && a.targetMax - a.targetMin >= 0.25
+            ? `${this._n(a.targetMin, this._dT)}–${this._n(a.targetMax, this._dT)} °C`
+            : `${this._n(a.target, this._dT)} °C`,
+        sub:
+          a.climates.length > 1
+            ? this._t("th_count", { n: a.climates.length }) + (a.heatingCount ? " · " + this._t("th_heating", { n: a.heatingCount }) : "")
+            : "",
+        ent: a.climates.length > 1 ? "" : a.climates[0]?.id || "",
+        attr: a.climates.length > 1 ? ` data-clim="${this._all.indexOf(a)}"` : "",
         cls: a.heating ? "lv-warn" : "",
       });
     if (a.moldSensor != null)
@@ -1201,6 +1239,7 @@ class AuraClimateCard extends HTMLElement {
     tiles = tiles.filter((t) => c[t.k] !== false);
     const sections = [];
     if (r.wall_learn && this._wallPanel === this._all.indexOf(a)) sections.push(this._renderWallPanel(a));
+    if (a.climates.length > 1 && this._climPanel === this._all.indexOf(a)) sections.push(this._renderClimPanel(a));
     if (c.show_ventilation) sections.push(this._renderVent(a));
     if (c.show_mold) sections.push(this._renderMold(a));
     const charts = [];
@@ -1252,6 +1291,21 @@ class AuraClimateCard extends HTMLElement {
         <div class="ghum" data-entity="${esc(a.room.humidity)}">${icon("drop")}${this._n(a.rh, this._dH)} %</div>
         <div class="gcomf ${a.comfort.length ? "bad" : ""}">${comfort}</div>
       </button>
+    </div>`;
+  }
+
+  _renderClimPanel(a) {
+    return `<div class="wpanel cpanel">
+      <div class="wph">${icon("target")}<b>${this._t("th_title")}</b><button class="wx" data-cclose="1" aria-label="${this._t("wl_close")}">✕</button></div>
+      <div class="clist">${a.climates
+        .map(
+          (x) => `<button class="crow ${x.heating ? "heat" : ""} ${x.off ? "off" : ""}" data-entity="${esc(x.id)}">
+            ${icon(x.heating ? "flame" : "target")}
+            <span class="cn">${esc(x.name)}</span>
+            <span class="cv">${x.current != null ? `${this._n(x.current, this._dT)} °C → ` : ""}<b>${x.off ? this._t("th_off") : x.target != null ? this._n(x.target, this._dT) + " °C" : "–"}</b></span>
+          </button>`
+        )
+        .join("")}</div>
     </div>`;
   }
 
@@ -1448,6 +1502,18 @@ hy = [10, 90];
         rerender();
       })
     );
+    root.querySelectorAll("[data-clim]").forEach((b) =>
+      b.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        const i = Number(b.dataset.clim);
+        this._climPanel = this._climPanel === i ? null : i;
+        rerender();
+      })
+    );
+    root.querySelector("[data-cclose]")?.addEventListener("click", () => {
+      this._climPanel = null;
+      rerender();
+    });
     root.querySelector("[data-wclose]")?.addEventListener("click", () => {
       this._wallPanel = null;
       this._wallMsg = null;
@@ -1583,6 +1649,11 @@ hy = [10, 90];
     .wbtn{padding:8px 14px;border-radius:10px;background:var(--soft2);font-weight:600}
     .wbtn.pri{background:var(--hum);color:#fff}
     .wmsg{margin-top:8px;font-size:.85em;font-weight:600}.wmsg.ok{color:var(--ok)}.wmsg.bad{color:var(--alarm)}
+    .clist{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+    .crow{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:12px;background:var(--card-bg)}
+    .crow .ic{color:var(--secondary-text-color)}.crow.heat .ic{color:var(--warn)}.crow.off{opacity:.55}
+    .cn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .cv{white-space:nowrap;font-size:.9em;color:var(--secondary-text-color)}.cv b{color:var(--primary-text-color)}
     .cond{display:flex;align-items:center;gap:6px;margin-top:8px;color:var(--alarm);font-weight:600;font-size:.88em}
     .charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin-top:12px}
     .chart{padding:10px 12px 6px;border-radius:16px;background:var(--soft)}
@@ -1733,7 +1804,7 @@ const ED_I18N = {
     co2: "CO₂-Sensor (optional)",
     wall_temperature: "Wandtemperatur-Sensor (optional)",
     mold: "Schimmel-Sensor (optional)",
-    climate: "Thermostat / Klima (optional)",
+    climate: "Thermostate / Heizkörper (optional, mehrere möglich)",
     target_temperature: "Solltemperatur ohne Thermostat (optional)",
     up: "Nach oben",
     down: "Nach unten",
@@ -1860,7 +1931,7 @@ const ED_I18N = {
     co2: "CO₂ sensor (optional)",
     wall_temperature: "Wall temperature sensor (optional)",
     mold: "Mold sensor (optional)",
-    climate: "Thermostat / climate (optional)",
+    climate: "Thermostats / climate (optional, several allowed)",
     target_temperature: "Target temperature without thermostat (optional)",
     up: "Move up",
     down: "Move down",
@@ -2011,7 +2082,7 @@ class AuraClimateCardEditor extends HTMLElement {
       ent("wall_temperature", "sensor", "temperature"),
       ent("wall_learn", "input_text"),
       ent("mold", "sensor"),
-      ent("climate", "climate"),
+      { name: "climate", selector: { entity: { domain: "climate", multiple: true } } },
       num("target_temperature", 5, 30, 0.5),
       {
         type: "expandable",
@@ -2026,6 +2097,11 @@ class AuraClimateCardEditor extends HTMLElement {
         ],
       },
     ];
+  }
+
+  // ältere Konfigurationen: climate als Einzelwert → Liste für den Mehrfach-Picker
+  _roomData(room) {
+    return room && room.climate !== undefined ? { ...room, climate: toList(room.climate) } : room;
   }
 
   _generalData() {
@@ -2100,12 +2176,12 @@ class AuraClimateCardEditor extends HTMLElement {
       const f = document.createElement("ha-form");
       f.hass = this._hass;
       f.schema = this._roomSchema();
-      f.data = room;
+      f.data = this._roomData(room);
       f.computeLabel = label;
       f.computeHelper = (sc) => (sc.name === "wall_learn" ? l.wall_learn_help : sc.name === "wall_temperature" ? l.wall_temperature_help : undefined);
       f.addEventListener("value-changed", (ev) => {
         const v = { ...ev.detail.value };
-        Object.keys(v).forEach((k) => (v[k] === "" || v[k] === undefined || v[k] === null) && delete v[k]);
+        Object.keys(v).forEach((k) => (v[k] === "" || v[k] === undefined || v[k] === null || (Array.isArray(v[k]) && !v[k].length)) && delete v[k]);
         this._config.rooms = this._config.rooms.map((r, j) => (j === i ? v : r));
         box.querySelector(".n").textContent = v.name || `${l.room} ${i + 1}`;
         this._fire();
@@ -2144,7 +2220,7 @@ class AuraClimateCardEditor extends HTMLElement {
 
   _refreshData() {
     if (this._gForm) this._gForm.data = this._generalData();
-    (this._rForms || []).forEach((f, i) => (f.data = this._config.rooms[i]));
+    (this._rForms || []).forEach((f, i) => (f.data = this._roomData(this._config.rooms[i])));
   }
 
   _fire() {

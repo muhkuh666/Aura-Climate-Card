@@ -1,15 +1,15 @@
-## 🇬🇧 Aura Climate Card v1.4.0 – self-learning wall spots
+## 🇬🇧 Aura Climate Card v1.5.0 – several thermostats per room
 
-- **Measure wall spots:** tap the *wall surface* tile, enter the IR-measured temperature of the coldest spot – the card calculates the real wall factor fRsi (using the 12 h outdoor average, walls react slowly) and learns from every measurement (weighted average, outliers weighted less, plausibility checks)
-- **Learns automatically** from a wall temperature sensor – the sensor can then move on to the next room, the learned value stays
-- Stored per room in an `input_text` helper (`wall_learn`) – same value on all devices
-- Tile shows *learned · n measurements*; mold risk and mold hours use the learned value
+- `climate` now accepts **one or several thermostats** per room (editor: multi-select)
+- Target tile shows the range of target temperatures and "3 thermostats · 1 heating"; tap opens a list with current → target temperature of every thermostat (tap a row for details)
+- Thermostats that are off are ignored for the target; the alarm "heating with open window" fires as soon as any of them is heating
+- Existing configurations with a single thermostat keep working
 
-## 🇩🇪 Aura Climate Card v1.4.0 – selbstlernende Wandpunkte
+## 🇩🇪 Aura Climate Card v1.5.0 – mehrere Thermostate pro Raum
 
-- **Wandpunkte messen:** Auf die Kachel *Wandoberfläche* tippen, die mit IR-Thermometer gemessene Temperatur der kältesten Stelle eintragen – die Karte berechnet den echten Wandfaktor fRsi (mit dem 12-h-Außenmittel, weil Wände träge sind) und lernt aus jeder Messung dazu (gewichteter Mittelwert, Ausreißer zählen weniger, Plausibilitätsprüfung)
-- **Lernt automatisch** von einem Wandtemperatur-Sensor – danach kann der Sensor in den nächsten Raum wandern, der gelernte Wert bleibt
-- Gespeichert pro Raum in einem `input_text`-Helfer (`wall_learn`) – auf allen Geräten gleich
-- Kachel zeigt *gelernt · n Messungen*; Schimmelrisiko und Schimmelstunden rechnen mit dem gelernten Wert
+- `climate` nimmt jetzt **ein oder mehrere Thermostate** pro Raum (Editor: Mehrfachauswahl)
+- Soll-Kachel zeigt den Bereich der Solltemperaturen und „3 Thermostate · 1 heizt“; Tipp öffnet die Liste mit Ist → Soll jedes Thermostats (Tipp auf eine Zeile für Details)
+- Ausgeschaltete Thermostate zählen beim Sollwert nicht mit; der Alarm „Heizung bei offenem Fenster“ greift, sobald irgendeins heizt
+- Bestehende Konfigurationen mit einem Thermostat funktionieren unverändert
 
 ☕ Gefällt dir die Karte? / Like the card? → [Buy Me a Coffee](https://buymeacoffee.com/muhkuh666)

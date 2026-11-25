@@ -24,6 +24,7 @@
 - **Ventilation advice with reasons:** compares absolute humidity indoors and outdoors – it tells you when ventilating actually helps and when the outdoor air is too humid. Includes burst-ventilation duration by outdoor temperature and the expected humidity afterwards.
 - **Air quality score (0–100)** per room from CO₂, VOC, PM2.5 and PM10 – the worst value counts and is named ("particulates PM2.5").
 - **CO₂ estimate without a sensor:** calculated from room volume, persons (fixed or via presence sensor), window state and air change rate (mass balance). Clearly marked as *estimated*. A room is only estimated if it has a presence sensor or a number of `persons` – without a presence sensor those persons are assumed to be present all the time.
+- **Several thermostats per room:** the target tile shows the range (e.g. 21.5–22.0 °C) and how many are heating; tap it for the list of all thermostats.
 - **Window timer:** "open for 14 min – close the window", plus an alarm when the heating runs with the window open.
 - **Comfort chart:** all rooms as dots in a temperature/humidity diagram with comfort zone.
 - **History:** temperature & humidity of the selected room (1–168 h).
@@ -54,7 +55,9 @@ rooms:
     temperature: sensor.living_temperature
     humidity: sensor.living_humidity
     co2: sensor.living_co2
-    climate: climate.living_room
+    climate:                  # several thermostats per room
+      - climate.living_room_window
+      - climate.living_room_sofa
 ```
 
 Everything below can also be set in the **visual editor** (sections: Outdoor sensors, Layout & sections, Tiles, Details & charts, Thresholds, Ventilation, Number format, Colors). Only values that differ from the default are written to YAML.
@@ -108,7 +111,7 @@ Everything below can also be set in the **visual editor** (sections: Outdoor sen
 | **Colors** | | |
 | `color_temperature`, `color_humidity`, `color_ok`, `color_warn`, `color_alarm`, `color_info` | – | Hex or `[r,g,b]` |
 
-**Room options:** `name`, `icon`, `temperature`*, `humidity`*, `window`, `co2`, `wall_temperature`, `wall_learn`, `mold`, `climate`, `target_temperature` (* required) – plus **own thresholds per room**: `temp_min`, `temp_max`, `hum_min`, `hum_max`, `mold_warn`, `mold_alarm`, `co2_warn`, `co2_alarm`, `frsi`, `vent_threshold`, `aq_warn`, `aq_alarm` – plus **air quality**: `voc`, `pm25`, `pm10`, `presence` (binary_sensor = present/absent, sensor/input_number = number of persons), `volume` (m³), `persons`, `ach`
+**Room options:** `name`, `icon`, `temperature`*, `humidity`*, `window`, `co2`, `wall_temperature`, `wall_learn`, `mold`, `climate` (one or a list of thermostats), `target_temperature` (* required) – plus **own thresholds per room**: `temp_min`, `temp_max`, `hum_min`, `hum_max`, `mold_warn`, `mold_alarm`, `co2_warn`, `co2_alarm`, `frsi`, `vent_threshold`, `aq_warn`, `aq_alarm` – plus **air quality**: `voc`, `pm25`, `pm10`, `presence` (binary_sensor = present/absent, sensor/input_number = number of persons), `volume` (m³), `persons`, `ach`
 
 ```yaml
   - name: Bathroom          # bathroom may be more humid
@@ -147,6 +150,7 @@ The tile then shows *learned · n measurements* and the mold risk uses your real
 - **Lüftungsempfehlung mit Begründung:** vergleicht die absolute Feuchte innen und außen – sagt dir, wann Lüften wirklich hilft und wann die Außenluft zu feucht ist. Mit Stoßlüft-Dauer je nach Außentemperatur und erwarteter Feuchte nach dem Lüften.
 - **Luftqualitäts-Score (0–100)** pro Raum aus CO₂, VOC, PM2.5 und PM10 – der schlechteste Wert zählt und wird genannt („Feinstaub PM2.5“).
 - **CO₂-Schätzung ohne Sensor:** berechnet aus Raumvolumen, Personen (fest oder per Anwesenheitssensor), Fensterzustand und Luftwechsel (Massenbilanz). Deutlich als *geschätzt* markiert. Geschätzt wird nur, wenn der Raum einen Anwesenheitssensor oder eine Personenzahl hat – ohne Anwesenheitssensor gelten diese Personen als dauerhaft anwesend.
+- **Mehrere Thermostate pro Raum:** Die Soll-Kachel zeigt den Bereich (z. B. 21,5–22,0 °C) und wie viele gerade heizen; Tipp darauf zeigt alle Thermostate einzeln.
 - **Fenster-Timer:** „seit 14 min offen – Fenster schließen“ und Alarm, wenn bei offenem Fenster geheizt wird.
 - **Behaglichkeitsdiagramm:** alle Räume als Punkte im Temperatur-/Feuchte-Diagramm mit Wohlfühlbereich.
 - **Verlauf:** Temperatur & Feuchte des gewählten Raums (1–168 h).
