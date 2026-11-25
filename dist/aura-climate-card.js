@@ -2,7 +2,7 @@
  * Aura Climate Card – Raumklima, Schimmelrisiko & Lüftungsempfehlung für Home Assistant
  * MIT © muhkuh666 – https://github.com/muhkuh666/Aura-Climate-Card
  */
-const AURA_VERSION = "1.1.0";
+const AURA_VERSION = "1.2.0";
 
 /* ------------------------------------------------------------------ */
 /*  Texte                                                              */
@@ -62,6 +62,23 @@ const AURA_I18N = {
     r_hot: "Draußen ist es wärmer als drinnen",
     r_cooler: "Draußen {o} °C – kühler als drinnen",
     r_nooutdoor: "Ohne Außensensor kein Feuchtevergleich möglich",
+    r_co2_est: "CO₂ geschätzt über {v} ppm",
+    r_aq: "Luftqualität {l}: {w}",
+    aq: "Luftqualität",
+    aq_1: "sehr gut",
+    aq_2: "gut",
+    aq_3: "mäßig",
+    aq_4: "schlecht",
+    aq_5: "sehr schlecht",
+    est: "geschätzt",
+    persons: "{n} Pers.",
+    voc: "VOC",
+    pm25: "PM2.5",
+    pm10: "PM10",
+    w_co2: "CO₂ hoch",
+    w_voc: "Ausdünstungen (VOC)",
+    w_pm25: "Feinstaub PM2.5",
+    w_pm10: "Feinstaub PM10",
     r_heat: "Heizung herunterdrehen oder Fenster schließen",
     sum_ok: "Alles im grünen Bereich",
     sum_vent: "{n} Raum lüften|{n} Räume lüften",
@@ -124,6 +141,23 @@ const AURA_I18N = {
     r_hot: "It's warmer outside than inside",
     r_cooler: "Outside {o} °C – cooler than inside",
     r_nooutdoor: "No outdoor sensor – humidity comparison unavailable",
+    r_co2_est: "CO₂ estimated above {v} ppm",
+    r_aq: "Air quality {l}: {w}",
+    aq: "Air quality",
+    aq_1: "excellent",
+    aq_2: "good",
+    aq_3: "moderate",
+    aq_4: "poor",
+    aq_5: "very poor",
+    est: "estimated",
+    persons: "{n} pers.",
+    voc: "VOC",
+    pm25: "PM2.5",
+    pm10: "PM10",
+    w_co2: "high CO₂",
+    w_voc: "emissions (VOC)",
+    w_pm25: "particulates PM2.5",
+    w_pm10: "particulates PM10",
     r_heat: "Turn the heating down or close the window",
     sum_ok: "Everything looks fine",
     sum_vent: "{n} room to ventilate|{n} rooms to ventilate",
@@ -155,6 +189,9 @@ const AURA_DEFAULTS = {
   show_window: true,
   show_target: true,
   show_mold_sensor: true,
+  show_air_quality: true,
+  show_voc: true,
+  show_pm: true,
   show_reasons: true,
   show_ah_compare: true,
   show_mold_hours: true,
@@ -178,6 +215,15 @@ const AURA_DEFAULTS = {
   close_tolerance: 5,
   close_below: 15,
   heating_alarm: true,
+  co2_estimate: true,
+  co2_estimate_vent: true,
+  co2_outdoor: 420,
+  default_volume: 40,
+  default_persons: 1,
+  ach_closed: 0.3,
+  ach_open: 6,
+  aq_warn: 60,
+  aq_alarm: 40,
   temp_min: 19,
   temp_max: 23,
   hum_min: 40,
@@ -197,7 +243,7 @@ const AURA_DEFAULTS = {
 };
 
 // Werte, die pro Raum überschrieben werden können
-const AURA_ROOM_OVERRIDES = ["temp_min", "temp_max", "hum_min", "hum_max", "mold_warn", "mold_alarm", "co2_warn", "co2_alarm", "vent_threshold", "frsi"];
+const AURA_ROOM_OVERRIDES = ["aq_warn", "aq_alarm", "temp_min", "temp_max", "hum_min", "hum_max", "mold_warn", "mold_alarm", "co2_warn", "co2_alarm", "vent_threshold", "frsi"];
 
 /* ------------------------------------------------------------------ */
 /*  Bauphysik                                                          */
@@ -220,6 +266,33 @@ const Phys = {
 };
 
 const LEVEL = { ok: 0, info: 1, warn: 2, alarm: 3 };
+
+/* Luftqualität: Teil-Scores 0–100 (stückweise linear) */
+const AQ = {
+  lerp: (v, pts) => {
+    if (v <= pts[0][0]) return pts[0][1];
+    for (let i = 1; i < pts.length; i++) {
+      const [x1, y1] = pts[i - 1],
+        [x2, y2] = pts[i];
+      if (v <= x2) return y1 + ((v - x1) / (x2 - x1)) * (y2 - y1);
+    }
+    return pts[pts.length - 1][1];
+  },
+  co2: (v) => AQ.lerp(v, [[600, 100], [800, 85], [1000, 70], [1400, 40], [2000, 10], [2500, 0]]),
+  // VOC: ppb (tVOC), µg/m³ oder dimensionsloser Index (z. B. Sensirion VOC-Index, 100 = Normalwert)
+  voc: (v, unit) => {
+    const u = String(unit || "").toLowerCase();
+    if (u.includes("ppb")) return AQ.lerp(v, [[200, 100], [500, 70], [1000, 40], [3000, 0]]);
+    if (u.includes("µg") || u.includes("ug") || u.includes("mg")) {
+      const x = u.includes("mg") ? v * 1000 : v;
+      return AQ.lerp(x, [[300, 100], [1000, 60], [3000, 20], [5000, 0]]);
+    }
+    return AQ.lerp(v, [[100, 100], [150, 75], [250, 40], [400, 0]]);
+  },
+  pm25: (v) => AQ.lerp(v, [[5, 100], [15, 75], [25, 50], [50, 20], [75, 0]]),
+  pm10: (v) => AQ.lerp(v, [[15, 100], [45, 70], [100, 30], [150, 0]]),
+  label: (s) => (s >= 90 ? 1 : s >= 75 ? 2 : s >= 60 ? 3 : s >= 40 ? 4 : 5),
+};
 
 /* ------------------------------------------------------------------ */
 /*  Hilfsfunktionen                                                    */
@@ -260,6 +333,8 @@ const ICONS = {
   flame: '<path d="M12 3c1 3.5 5 5.5 5 10a5 5 0 0 1-10 0c0-2.5 1.3-4 2.5-5 .3 1.8 1.2 2.8 2.2 3.2C11 8.5 11 6 12 3z"/>',
   home: '<path d="M4 11 12 4l8 7v9H4z"/><path d="M10 20v-5h4v5"/>',
   back: '<path d="M15 5l-7 7 7 7"/>',
+  leaf: '<path d="M5 19c0-8 5-13 14-14-1 9-6 14-14 14z"/><path d="M5 19 13 11"/>',
+  dust: '<circle cx="6" cy="8" r="1.4"/><circle cx="12" cy="6" r="1.1"/><circle cx="17" cy="9" r="1.6"/><circle cx="8" cy="14" r="1.2"/><circle cx="14" cy="13" r="1.4"/><circle cx="11" cy="19" r="1.1"/><circle cx="18" cy="17" r="1.2"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8"/>',
 };
 const icon = (name, cls = "") =>
@@ -387,6 +462,69 @@ class AuraClimateCard extends HTMLElement {
   get _dH() { return Math.max(0, Math.min(2, Number(this._config.decimals_hum) || 0)); }
   get _dA() { return Math.max(0, Math.min(2, Number(this._config.decimals_ah) || 0)); }
 
+  /* CO₂-Schätzung über Massenbilanz: dC/dt = N·G/V − n·(C − C_außen)
+     G = 0,016 m³/h CO₂ pro Person (Ruhe/leichte Tätigkeit), n = Luftwechsel 1/h.
+     Zeitverlauf aus dem letzten Fenster- und Anwesenheitswechsel (analytisch, stückweise). */
+  _estimateCo2(room, c) {
+    const V = Number(room.volume ?? c.default_volume);
+    if (!(V > 0)) return null;
+    const baseP = Number(room.persons ?? c.default_persons);
+    const cOut = Number(c.co2_outdoor) || 420;
+    const nClosed = Math.max(0.05, Number(room.ach ?? c.ach_closed) || 0.3);
+    const nOpen = Math.max(nClosed, Number(c.ach_open) || 6);
+    const G = 0.016;
+    const now = Date.now();
+    const H24 = 24 * 3600e3;
+
+    // Anwesenheit: binary → an/aus, numerisch → Personenzahl
+    const ps = this._st(room.presence);
+    let pNow = baseP,
+      pPrev = baseP,
+      pChange = null;
+    if (ps) {
+      const v = parseFloat(ps.state);
+      if (isFinite(v)) pNow = pPrev = v;
+      else {
+        const on = ["on", "home", "true", "detected", "occupied"].includes(String(ps.state).toLowerCase());
+        pNow = on ? baseP || 1 : 0;
+        pPrev = on ? 0 : baseP || 1;
+        pChange = new Date(ps.last_changed).getTime();
+      }
+    }
+    if (!(pNow >= 0)) return null;
+    if (!ps && !(baseP > 0)) return null; // 0 Personen ohne Anwesenheitssensor → keine Schätzung
+
+    const ws = this._st(room.window);
+    const wOpenNow = !!ws && ["on", "open", "opening", "tilted", "true"].includes(String(ws.state).toLowerCase());
+    const wChange = ws ? new Date(ws.last_changed).getTime() : null;
+
+    // Zeitpunkte sammeln (max. 24 h zurück)
+    const events = [];
+    if (wChange && now - wChange < H24) events.push(wChange);
+    if (pChange && now - pChange < H24) events.push(pChange);
+    events.sort((x, y) => x - y);
+    const stateAt = (ts) => ({
+      open: wChange && ts < wChange ? !wOpenNow : wOpenNow,
+      p: pChange && ts < pChange ? pPrev : pNow,
+    });
+    const css = (st) => {
+      const n = st.open ? nOpen : nClosed;
+      return { n, c: cOut + (st.p * G * 1e6) / (n * V) };
+    };
+    // Startwert: Gleichgewicht des ältesten Zustands
+    let t = events.length ? events[0] - 1 : now;
+    let C = css(stateAt(t)).c;
+    const pts = [...events, now];
+    for (let i = 0; i < pts.length; i++) {
+      const from = i === 0 ? t : pts[i - 1];
+      const to = pts[i];
+      const seg = css(stateAt((from + to) / 2));
+      const dtH = Math.max(0, (to - from) / 3600e3);
+      C = seg.c + (C - seg.c) * Math.exp(-seg.n * dtH);
+    }
+    return { ppm: Math.round(C / 10) * 10, persons: pNow };
+  }
+
   _outdoor() {
     const c = this._config;
     const t = this._num(c.outdoor_temperature);
@@ -401,6 +539,32 @@ class AuraClimateCard extends HTMLElement {
     const rh = this._num(room.humidity);
     const a = { room, t, rh, valid: t != null && rh != null, level: "ok", reasons: [], cfg: c };
     a.co2 = this._num(room.co2);
+    a.co2Est = false;
+    if (a.co2 == null && c.co2_estimate) {
+      const est = this._estimateCo2(room, c);
+      if (est) {
+        a.co2 = est.ppm;
+        a.co2Est = true;
+        a.persons = est.persons;
+      }
+    }
+    a.voc = this._num(room.voc);
+    a.vocUnit = this._st(room.voc)?.attributes?.unit_of_measurement;
+    a.pm25 = this._num(room.pm25);
+    a.pm10 = this._num(room.pm10);
+    const subs = [];
+    if (a.co2 != null) subs.push(["co2", AQ.co2(a.co2)]);
+    if (a.voc != null) subs.push(["voc", AQ.voc(a.voc, a.vocUnit)]);
+    if (a.pm25 != null) subs.push(["pm25", AQ.pm25(a.pm25)]);
+    if (a.pm10 != null) subs.push(["pm10", AQ.pm10(a.pm10)]);
+    if (subs.length) {
+      subs.sort((x, y) => x[1] - y[1]);
+      a.aq = Math.round(subs[0][1]);
+      a.aqWorst = subs[0][0];
+      a.aqOnlyEst = a.co2Est && subs.length === 1;
+      a.aqLevel = a.aq < c.aq_alarm ? "alarm" : a.aq < c.aq_warn ? "warn" : "ok";
+      if (a.aqOnlyEst && a.aqLevel === "alarm") a.aqLevel = "warn";
+    }
     a.moldSensor = this._num(room.mold);
     const climate = this._st(room.climate);
     a.target = climate?.attributes?.temperature ?? (room.target_temperature != null ? Number(room.target_temperature) : null);
@@ -444,6 +608,7 @@ class AuraClimateCard extends HTMLElement {
 
     const moldLvl = a.mold === "high" ? "alarm" : a.mold === "medium" ? "warn" : "ok";
     a.level = LEVEL[moldLvl] > LEVEL[a.vLevel] ? moldLvl : a.vLevel;
+    if (a.aqLevel && LEVEL[a.aqLevel] > LEVEL[a.level]) a.level = a.aqLevel;
     return a;
   }
 
@@ -453,7 +618,8 @@ class AuraClimateCard extends HTMLElement {
     const needs = [];
     if (a.rh > c.hum_max) needs.push("humid");
     if (a.mold !== "low") needs.push("mold");
-    if (a.co2 != null && a.co2 >= c.co2_warn) needs.push("co2");
+    if (a.co2 != null && a.co2 >= c.co2_warn && (!a.co2Est || c.co2_estimate_vent)) needs.push("co2");
+    if (a.aq != null && a.aqWorst !== "co2" && a.aqLevel !== "ok" && !needs.includes("co2")) needs.push("co2");
 
     a.duration = out.hasT ? this._ventMinutes(out.t) : Number(c.vent_min_cold);
     if (out.ok) {
@@ -490,7 +656,11 @@ class AuraClimateCard extends HTMLElement {
     } else if (needs.length) {
       if (needs.includes("humid")) R.push(this._t("r_humid", { v: c.hum_max }));
       if (needs.includes("mold")) R.push(this._t("r_mold"));
-      if (needs.includes("co2")) R.push(this._t("r_co2", { v: c.co2_warn }));
+      if (needs.includes("co2")) {
+        if (a.aq != null && a.aqWorst !== "co2" && a.aqLevel !== "ok")
+          R.push(this._t("r_aq", { l: this._t("aq_" + AQ.label(a.aq)), w: this._t("w_" + a.aqWorst) }));
+        else R.push(this._t(a.co2Est ? "r_co2_est" : "r_co2", { v: c.co2_warn }));
+      }
       const co2Only = needs.length === 1 && needs[0] === "co2";
       if (!out.ok) {
         key = "v_now";
@@ -498,7 +668,7 @@ class AuraClimateCard extends HTMLElement {
         if (!co2Only) R.push(this._t("r_nooutdoor"));
       } else if (a.drier || co2Only) {
         key = "v_now";
-        lvl = a.mold === "high" || (a.co2 ?? 0) >= c.co2_alarm ? "alarm" : "warn";
+        lvl = a.mold === "high" || (!a.co2Est && (a.co2 ?? 0) >= c.co2_alarm) || a.aqLevel === "alarm" ? "alarm" : "warn";
         if (a.drier) {
           R.push(this._t("r_drier", ahTxt()));
           R.push(this._t("r_after", { v: this._n(a.rhAfter, this._dH) }));
@@ -615,7 +785,7 @@ class AuraClimateCard extends HTMLElement {
     if (!this._hass || !this._config) return;
     const c = this._config;
     const ids = [c.outdoor_temperature, c.outdoor_humidity];
-    this._rooms.forEach((r) => ids.push(r.temperature, r.humidity, r.window, r.co2, r.wall_temperature, r.mold, r.climate));
+    this._rooms.forEach((r) => ids.push(r.temperature, r.humidity, r.window, r.co2, r.wall_temperature, r.mold, r.climate, r.voc, r.pm25, r.pm10, r.presence));
     const sig = ids
       .map((i) => {
         const s = this._st(i);
@@ -704,6 +874,7 @@ class AuraClimateCard extends HTMLElement {
   }
 
   _renderGrid(all) {
+    const c = this._config;
     return `<div class="grid">${all
       .map((a, i) => {
         const v = a.valid;
@@ -714,7 +885,8 @@ class AuraClimateCard extends HTMLElement {
           <div class="gfoot">
             ${v ? `<span class="chip lv-${a.vLevel}">${icon(a.windowOpen ? "windowOpen" : "wind")}${this._t(a.vKey)}</span>` : `<span class="dim">${this._t("unavailable")}</span>`}
             ${v && a.mold !== "low" ? `<span class="chip lv-${a.mold === "high" ? "alarm" : "warn"}">${icon("mold")}${this._t("risk_" + a.mold)}</span>` : ""}
-            ${a.co2 != null ? `<span class="chip">${this._n(a.co2, 0)} ppm</span>` : ""}
+            ${a.aq != null && c.show_air_quality ? `<span class="chip lv-${a.aqLevel}">${this._t("aq")} ${a.aq}</span>` : ""}
+            ${a.co2 != null ? `<span class="chip">${a.co2Est ? "~" : ""}${this._n(a.co2, 0)} ppm</span>` : ""}
           </div>
         </button>`;
       })
@@ -740,9 +912,41 @@ class AuraClimateCard extends HTMLElement {
         cls: a.condensation ? "lv-alarm" : "",
       },
     ];
+    const rc = a.cfg;
+    if (a.aq != null)
+      tiles.unshift({
+        k: "show_air_quality",
+        ic: "leaf",
+        label: this._t("aq"),
+        val: `${a.aq} · ${this._t("aq_" + AQ.label(a.aq))}`,
+        sub: a.aqOnlyEst ? this._t("est") : a.aqLevel !== "ok" ? this._t("w_" + a.aqWorst) : "",
+        ent: r.co2 || r.pm25 || r.voc || r.pm10 || r.presence || r.window,
+        cls: "lv-" + a.aqLevel + " aqtile",
+      });
     if (a.co2 != null) {
-      const lv = a.co2 >= c.co2_alarm ? "alarm" : a.co2 >= c.co2_warn ? "warn" : "";
-      tiles.push({ k: "show_co2", ic: "co2", label: this._t("co2"), val: `${this._n(a.co2, 0)} ppm`, ent: r.co2, cls: lv ? "lv-" + lv : "" });
+      const lv = a.co2 >= rc.co2_alarm ? "alarm" : a.co2 >= rc.co2_warn ? "warn" : "";
+      tiles.push({
+        k: "show_co2",
+        ic: "co2",
+        label: this._t("co2"),
+        val: `${a.co2Est ? "~" : ""}${this._n(a.co2, 0)} ppm`,
+        sub: a.co2Est ? `${this._t("est")} · ${this._t("persons", { n: this._n(a.persons, 0) })}` : "",
+        ent: r.co2 || r.presence || r.window,
+        cls: lv ? "lv-" + lv : "",
+      });
+    }
+    const unit = (id) => this._st(id)?.attributes?.unit_of_measurement || "";
+    if (a.voc != null) {
+      const sv = AQ.voc(a.voc, a.vocUnit);
+      tiles.push({ k: "show_voc", ic: "leaf", label: this._t("voc"), val: `${this._n(a.voc, 0)} ${esc(unit(r.voc))}`, ent: r.voc, cls: sv < 40 ? "lv-alarm" : sv < 60 ? "lv-warn" : "" });
+    }
+    if (a.pm25 != null) {
+      const sv = AQ.pm25(a.pm25);
+      tiles.push({ k: "show_pm", ic: "dust", label: this._t("pm25"), val: `${this._n(a.pm25, 0)} µg/m³`, ent: r.pm25, cls: sv < 40 ? "lv-alarm" : sv < 60 ? "lv-warn" : "" });
+    }
+    if (a.pm10 != null) {
+      const sv = AQ.pm10(a.pm10);
+      tiles.push({ k: "show_pm", ic: "dust", label: this._t("pm10"), val: `${this._n(a.pm10, 0)} µg/m³`, ent: r.pm10, cls: sv < 40 ? "lv-alarm" : sv < 60 ? "lv-warn" : "" });
     }
     if (a.hasWindow)
       tiles.push({
@@ -1086,6 +1290,27 @@ hy = [10, 90];
 const ED_I18N = {
   de: {
     title: "Titel",
+    g_air: "Luftqualität & CO₂-Schätzung",
+    r_air: "Luftqualität & CO₂-Schätzung",
+    show_air_quality: "Luftqualität",
+    show_voc: "VOC",
+    show_pm: "Feinstaub",
+    co2_estimate: "CO₂ schätzen, wenn kein Sensor",
+    co2_estimate_vent: "Schätzung löst Lüftungsempfehlung aus",
+    default_volume: "Raumvolumen Standard (m³)",
+    default_persons: "Personen Standard",
+    ach_closed: "Luftwechsel Fenster zu (1/h)",
+    ach_open: "Luftwechsel Fenster offen (1/h)",
+    co2_outdoor: "CO₂ außen (ppm)",
+    aq_warn: "Luftqualität Warnung unter",
+    aq_alarm: "Luftqualität Alarm unter",
+    voc: "VOC-Sensor (optional)",
+    pm25: "PM2.5-Sensor (optional)",
+    pm10: "PM10-Sensor (optional)",
+    presence: "Anwesenheit / Personenzahl (optional)",
+    volume: "Raumvolumen (m³)",
+    persons: "Personen (bei Anwesenheit)",
+    ach: "Luftwechsel Fenster zu (1/h)",
     default_room: "Startraum (Nr.)",
     tap_action: "Tippen auf Werte",
     ta_more: "Details öffnen",
@@ -1181,6 +1406,27 @@ const ED_I18N = {
   },
   en: {
     title: "Title",
+    g_air: "Air quality & CO₂ estimate",
+    r_air: "Air quality & CO₂ estimate",
+    show_air_quality: "Air quality",
+    show_voc: "VOC",
+    show_pm: "Particulates",
+    co2_estimate: "Estimate CO₂ if no sensor",
+    co2_estimate_vent: "Estimate triggers ventilation advice",
+    default_volume: "Default room volume (m³)",
+    default_persons: "Default persons",
+    ach_closed: "Air change window closed (1/h)",
+    ach_open: "Air change window open (1/h)",
+    co2_outdoor: "Outdoor CO₂ (ppm)",
+    aq_warn: "Air quality warning below",
+    aq_alarm: "Air quality alarm below",
+    voc: "VOC sensor (optional)",
+    pm25: "PM2.5 sensor (optional)",
+    pm10: "PM10 sensor (optional)",
+    presence: "Presence / person count (optional)",
+    volume: "Room volume (m³)",
+    persons: "Persons (when present)",
+    ach: "Air change window closed (1/h)",
     default_room: "Start room (no.)",
     tap_action: "Tap on values",
     ta_more: "Open details",
@@ -1353,7 +1599,7 @@ class AuraClimateCardEditor extends HTMLElement {
         { type: "grid", name: "", schema: [num("font_scale", 60, 160, 5), num("grid_min_width", 100, 400, 10)] },
       ]),
       sec("g_tiles", l.g_tiles, "mdi:view-grid-outline", [
-        bools(["show_dewpoint", "show_abs_humidity", "show_wall", "show_co2", "show_window", "show_target", "show_mold_sensor"]),
+        bools(["show_air_quality", "show_dewpoint", "show_abs_humidity", "show_wall", "show_co2", "show_voc", "show_pm", "show_window", "show_target", "show_mold_sensor"]),
       ]),
       sec("g_details", l.g_details, "mdi:chart-bell-curve", [
         bools(["show_reasons", "show_ah_compare", "show_mold_hours", "show_history_temp", "show_history_hum", "show_comfort_others", "show_outdoor_in_chart"]),
@@ -1369,6 +1615,11 @@ class AuraClimateCardEditor extends HTMLElement {
         { type: "grid", name: "", schema: [num("vent_min_freezing", 1, 60, 1), num("vent_min_cold", 1, 60, 1), num("vent_min_cool", 1, 60, 1), num("vent_min_mild", 1, 90, 1), num("vent_min_warm", 1, 120, 1)] },
         { type: "grid", name: "", schema: [num("close_tolerance", 0, 60, 1), num("close_below", -10, 30, 1)] },
         { name: "heating_alarm", selector: { boolean: {} } },
+      ]),
+      sec("g_air", l.g_air, "mdi:leaf", [
+        bools(["co2_estimate", "co2_estimate_vent"]),
+        { type: "grid", name: "", schema: [num("default_volume", 5, 500, 1), num("default_persons", 0, 20, 1), num("ach_closed", 0.05, 3, 0.05), num("ach_open", 1, 30, 0.5), num("co2_outdoor", 350, 600, 5)] },
+        { type: "grid", name: "", schema: [num("aq_warn", 10, 100, 1), num("aq_alarm", 0, 100, 1)] },
       ]),
       sec("g_format", l.g_format, "mdi:decimal", [
         { type: "grid", name: "", schema: [num("decimals_temp", 0, 2, 1), num("decimals_hum", 0, 2, 1), num("decimals_ah", 0, 2, 1)] },
@@ -1393,6 +1644,19 @@ class AuraClimateCardEditor extends HTMLElement {
       ent("humidity", "sensor", "humidity"),
       ent("window", "binary_sensor"),
       ent("co2", "sensor", "carbon_dioxide"),
+      {
+        type: "expandable",
+        name: "r_air",
+        flatten: true,
+        title: l.r_air,
+        icon: "mdi:leaf",
+        schema: [
+          ent("voc", "sensor"),
+          { type: "grid", name: "", schema: [ent("pm25", "sensor", "pm25"), ent("pm10", "sensor", "pm10")] },
+          { name: "presence", selector: { entity: { domain: ["binary_sensor", "sensor", "input_number", "input_boolean"] } } },
+          { type: "grid", name: "", schema: [num("volume", 5, 500, 1), num("persons", 0, 20, 1), num("ach", 0.05, 3, 0.05)] },
+        ],
+      },
       ent("wall_temperature", "sensor", "temperature"),
       ent("mold", "sensor"),
       ent("climate", "climate"),

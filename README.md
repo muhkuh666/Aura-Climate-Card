@@ -21,6 +21,8 @@
 - **Mold risk without a mold sensor:** the card estimates the temperature of the coldest wall spot from indoor and outdoor temperature (temperature factor fRsi, default 0.7 = German minimum insulation standard DIN 4108-2) and calculates the relative humidity right at the wall. ≥ 80 % for a longer time is the critical value for mold growth.
 - **Mold hours:** how many hours the wall spot was above the alarm threshold during the history period – duration matters more than short peaks.
 - **Ventilation advice with reasons:** compares absolute humidity indoors and outdoors – it tells you when ventilating actually helps and when the outdoor air is too humid. Includes burst-ventilation duration by outdoor temperature and the expected humidity afterwards.
+- **Air quality score (0–100)** per room from CO₂, VOC, PM2.5 and PM10 – the worst value counts and is named ("particulates PM2.5").
+- **CO₂ estimate without a sensor:** calculated from room volume, persons (fixed or via presence sensor), window state and air change rate (mass balance). Clearly marked as *estimated*; without a presence sensor it assumes the room is occupied all the time.
 - **Window timer:** "open for 14 min – close the window", plus an alarm when the heating runs with the window open.
 - **Comfort chart:** all rooms as dots in a temperature/humidity diagram with comfort zone.
 - **History:** temperature & humidity of the selected room (1–168 h).
@@ -88,18 +90,33 @@ Everything below can also be set in the **visual editor** (sections: Outdoor sen
 | `close_tolerance` | `5` | "Close window" after duration + X minutes |
 | `close_below` | `15` | Close hints only below this outdoor temperature (°C) |
 | `heating_alarm` | `true` | Alarm when heating with open window |
+| **Air quality & CO₂ estimate** | | |
+| `show_air_quality`, `show_voc`, `show_pm` | `true` | Tiles |
+| `co2_estimate` | `true` | Estimate CO₂ if a room has no CO₂ sensor |
+| `co2_estimate_vent` | `true` | Estimated CO₂ may trigger ventilation advice |
+| `default_volume` / `default_persons` | `40` / `1` | Defaults for rooms without own values |
+| `ach_closed` / `ach_open` | `0.3` / `6` | Air changes per hour, window closed / open (older houses ~0.5, airtight new builds ~0.1–0.2) |
+| `co2_outdoor` | `420` | Outdoor CO₂ (ppm) |
+| `aq_warn` / `aq_alarm` | `60` / `40` | Score thresholds *(per room too)* |
 | **Number format** | | |
 | `decimals_temp` / `decimals_hum` / `decimals_ah` | `1` / `0` / `1` | Decimal places |
 | **Colors** | | |
 | `color_temperature`, `color_humidity`, `color_ok`, `color_warn`, `color_alarm`, `color_info` | – | Hex or `[r,g,b]` |
 
-**Room options:** `name`, `icon`, `temperature`*, `humidity`*, `window`, `co2`, `wall_temperature`, `mold`, `climate`, `target_temperature` (* required) – plus **own thresholds per room**: `temp_min`, `temp_max`, `hum_min`, `hum_max`, `mold_warn`, `mold_alarm`, `co2_warn`, `co2_alarm`, `frsi`, `vent_threshold`
+**Room options:** `name`, `icon`, `temperature`*, `humidity`*, `window`, `co2`, `wall_temperature`, `mold`, `climate`, `target_temperature` (* required) – plus **own thresholds per room**: `temp_min`, `temp_max`, `hum_min`, `hum_max`, `mold_warn`, `mold_alarm`, `co2_warn`, `co2_alarm`, `frsi`, `vent_threshold`, `aq_warn`, `aq_alarm` – plus **air quality**: `voc`, `pm25`, `pm10`, `presence` (binary_sensor = present/absent, sensor/input_number = number of persons), `volume` (m³), `persons`, `ach`
 
 ```yaml
   - name: Bathroom          # bathroom may be more humid
     temperature: sensor.bath_temperature
     humidity: sensor.bath_humidity
     hum_max: 70
+  - name: Bedroom           # no CO₂ sensor → estimated
+    temperature: sensor.bedroom_temperature
+    humidity: sensor.bedroom_humidity
+    window: binary_sensor.bedroom_window
+    presence: binary_sensor.bedroom_presence
+    volume: 32
+    persons: 2
 ```
 
 > Tip: if your mold warning fires too often in a well-insulated building, raise `frsi` to 0.8 – or add a real wall temperature sensor (e.g. a sensor stuck to the coldest outer-wall corner) via `wall_temperature`.
@@ -113,6 +130,8 @@ Everything below can also be set in the **visual editor** (sections: Outdoor sen
 - **Schimmelrisiko ohne Schimmelsensor:** Die Karte schätzt aus Innen- und Außentemperatur die Temperatur der kältesten Wandstelle (Temperaturfaktor fRsi, Standard 0,7 = Mindestwärmeschutz nach DIN 4108-2) und berechnet die relative Feuchte direkt an der Wand. Ab 80 % über längere Zeit kann Schimmel wachsen.
 - **Schimmelstunden:** wie viele Stunden die Wandstelle im Verlaufszeitraum über der Alarmschwelle lag – entscheidend ist die Dauer, nicht kurze Spitzen.
 - **Lüftungsempfehlung mit Begründung:** vergleicht die absolute Feuchte innen und außen – sagt dir, wann Lüften wirklich hilft und wann die Außenluft zu feucht ist. Mit Stoßlüft-Dauer je nach Außentemperatur und erwarteter Feuchte nach dem Lüften.
+- **Luftqualitäts-Score (0–100)** pro Raum aus CO₂, VOC, PM2.5 und PM10 – der schlechteste Wert zählt und wird genannt („Feinstaub PM2.5“).
+- **CO₂-Schätzung ohne Sensor:** berechnet aus Raumvolumen, Personen (fest oder per Anwesenheitssensor), Fensterzustand und Luftwechsel (Massenbilanz). Deutlich als *geschätzt* markiert; ohne Anwesenheitssensor geht sie davon aus, dass der Raum dauerhaft belegt ist. Räume mit 0 Personen werden nicht geschätzt.
 - **Fenster-Timer:** „seit 14 min offen – Fenster schließen“ und Alarm, wenn bei offenem Fenster geheizt wird.
 - **Behaglichkeitsdiagramm:** alle Räume als Punkte im Temperatur-/Feuchte-Diagramm mit Wohlfühlbereich.
 - **Verlauf:** Temperatur & Feuchte des gewählten Raums (1–168 h).

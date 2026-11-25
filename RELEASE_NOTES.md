@@ -1,17 +1,15 @@
-## 🇬🇧 Aura Climate Card v1.1.0 – fully configurable
+## 🇬🇧 Aura Climate Card v1.2.0 – air quality
 
-- **Every section and tile can be hidden:** title, outdoor values, summary, tabs, gauge, ventilation, mold, charts, dew point, abs. humidity, wall, CO₂, window, target, mold sensor, reasons, comparison, mold hours, history lines
-- **Own thresholds per room** (e.g. bathroom may be more humid, bedroom cooler) incl. fRsi per room
-- Ventilation durations per outdoor temperature, close-window tolerance, heating alarm on/off
-- Start room, tap action, decimals, comfort chart range, font size, grid tile width, info color
-- Editor only writes values that differ from the default to YAML
+- **Air quality score 0–100** per room from CO₂, VOC, PM2.5 and PM10 – the worst value counts and is shown as the reason
+- **CO₂ estimate without a sensor:** from room volume, persons/presence sensor, window state and air change rate – clearly marked as *estimated*
+- New tiles: air quality, VOC, PM2.5, PM10; bad air quality triggers ventilation advice
+- New editor section "Air quality & CO₂ estimate" (global and per room)
 
-## 🇩🇪 Aura Climate Card v1.1.0 – voll konfigurierbar
+## 🇩🇪 Aura Climate Card v1.2.0 – Luftqualität
 
-- **Jeder Bereich und jede Kachel ausblendbar:** Titel, Außenwerte, Zusammenfassung, Tabs, Rundanzeige, Lüftung, Schimmel, Diagramme, Taupunkt, abs. Feuchte, Wand, CO₂, Fenster, Soll, Schimmelsensor, Begründungen, Vergleich, Schimmelstunden, Verlaufslinien
-- **Eigene Grenzwerte pro Raum** (z. B. Bad darf feuchter sein, Schlafzimmer kühler) inkl. fRsi pro Raum
-- Lüftungsdauern je Außentemperatur, Toleranz für „Fenster schließen“, Heizungsalarm ein/aus
-- Startraum, Tipp-Aktion, Nachkommastellen, Diagrammbereich, Schriftgröße, Kachelbreite im Raster, Info-Farbe
-- Der Editor schreibt nur Abweichungen vom Standard ins YAML
+- **Luftqualitäts-Score 0–100** pro Raum aus CO₂, VOC, PM2.5 und PM10 – der schlechteste Wert zählt und wird als Grund angezeigt
+- **CO₂-Schätzung ohne Sensor:** aus Raumvolumen, Personen/Anwesenheitssensor, Fensterzustand und Luftwechsel – deutlich als *geschätzt* markiert
+- Neue Kacheln: Luftqualität, VOC, PM2.5, PM10; schlechte Luftqualität löst Lüftungsempfehlung aus
+- Neuer Editor-Bereich „Luftqualität & CO₂-Schätzung“ (global und pro Raum)
 
 ☕ Gefällt dir die Karte? / Like the card? → [Buy Me a Coffee](https://buymeacoffee.com/muhkuh666)

@@ -23,9 +23,10 @@ const states = Object.fromEntries([
   S("sensor.aussen_feuchte", 88, { device_class: "humidity" }),
   S("sensor.wz_temp", 21.4), S("sensor.wz_hum", 52), S("sensor.wz_co2", 820), S("binary_sensor.wz_fenster", "off"),
   S("climate.wohnzimmer", "heat", { temperature: 21.5, hvac_action: "idle" }),
-  S("sensor.sz_temp", 17.6), S("sensor.sz_hum", 69), S("binary_sensor.sz_fenster", "off"),
+  S("sensor.sz_temp", 17.6), S("sensor.sz_hum", 69), S("binary_sensor.sz_fenster", "off", {}, 360),
   S("sensor.bad_temp", 22.3), S("sensor.bad_hum", 76), S("binary_sensor.bad_fenster", "on", {}, 7),
-  S("sensor.ku_temp", 20.8), S("sensor.ku_hum", 47),
+  S("sensor.ku_temp", 20.8), S("sensor.ku_hum", 47), S("sensor.ku_pm25", 38, { unit_of_measurement: "µg/m³" }),
+  S("sensor.wz_voc", 115, { unit_of_measurement: "" }), S("sensor.wz_pm25", 7, { unit_of_measurement: "µg/m³" }),
   S("sensor.kz_temp", 21.9), S("sensor.kz_hum", 55), S("sensor.kz_co2", 1320),
 ]);
 const base = { "sensor.aussen_temperatur": [3.5, 2.5], "sensor.wz_temp": [21.4, .8], "sensor.wz_hum": [52, 4], "sensor.sz_temp": [17.6, 1.2], "sensor.sz_hum": [69, 6],
@@ -46,10 +47,10 @@ const hass = {
   },
 };
 const rooms = [
-  { name: "Schlafzimmer", temperature: "sensor.sz_temp", humidity: "sensor.sz_hum", window: "binary_sensor.sz_fenster" },
-  { name: "Wohnzimmer", temperature: "sensor.wz_temp", humidity: "sensor.wz_hum", co2: "sensor.wz_co2", window: "binary_sensor.wz_fenster", climate: "climate.wohnzimmer" },
-  { name: "Bad", temperature: "sensor.bad_temp", humidity: "sensor.bad_hum", window: "binary_sensor.bad_fenster" },
-  { name: "Küche", temperature: "sensor.ku_temp", humidity: "sensor.ku_hum" },
+  { name: "Schlafzimmer", temperature: "sensor.sz_temp", humidity: "sensor.sz_hum", window: "binary_sensor.sz_fenster", volume: 32, persons: 2 },
+  { name: "Wohnzimmer", temperature: "sensor.wz_temp", humidity: "sensor.wz_hum", co2: "sensor.wz_co2", voc: "sensor.wz_voc", pm25: "sensor.wz_pm25", window: "binary_sensor.wz_fenster", climate: "climate.wohnzimmer" },
+  { name: "Bad", temperature: "sensor.bad_temp", humidity: "sensor.bad_hum", window: "binary_sensor.bad_fenster", persons: 0 },
+  { name: "Küche", temperature: "sensor.ku_temp", humidity: "sensor.ku_hum", pm25: "sensor.ku_pm25", persons: 0 },
   { name: "Kinderzimmer", temperature: "sensor.kz_temp", humidity: "sensor.kz_hum", co2: "sensor.kz_co2" },
 ];
 const mk = (host, cfg) => { const c = document.createElement("aura-climate-card"); c.setConfig(cfg); c.hass = hass; document.getElementById(host).appendChild(c); return c; };
