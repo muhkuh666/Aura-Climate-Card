@@ -19,6 +19,7 @@
 ### Features
 - **Per room:** temperature, humidity, dew point, absolute humidity (g/m³), optional CO₂, window, thermostat, wall temperature and mold sensor
 - **Mold risk without a mold sensor:** the card estimates the temperature of the coldest wall spot from indoor and outdoor temperature (temperature factor fRsi, default 0.7 = German minimum insulation standard DIN 4108-2) and calculates the relative humidity right at the wall. ≥ 80 % for a longer time is the critical value for mold growth.
+- **Self-learning wall spots:** measure the coldest spot with an IR thermometer, tap the *wall surface* tile and enter the value – the card learns the real wall factor (fRsi) of the room. Or stick a temperature sensor to the cold corner for a few days: the card learns automatically, then the sensor can move on to the next room. Stored in an `input_text` helper per room (see below).
 - **Mold hours:** how many hours the wall spot was above the alarm threshold during the history period – duration matters more than short peaks.
 - **Ventilation advice with reasons:** compares absolute humidity indoors and outdoors – it tells you when ventilating actually helps and when the outdoor air is too humid. Includes burst-ventilation duration by outdoor temperature and the expected humidity afterwards.
 - **Air quality score (0–100)** per room from CO₂, VOC, PM2.5 and PM10 – the worst value counts and is named ("particulates PM2.5").
@@ -107,7 +108,7 @@ Everything below can also be set in the **visual editor** (sections: Outdoor sen
 | **Colors** | | |
 | `color_temperature`, `color_humidity`, `color_ok`, `color_warn`, `color_alarm`, `color_info` | – | Hex or `[r,g,b]` |
 
-**Room options:** `name`, `icon`, `temperature`*, `humidity`*, `window`, `co2`, `wall_temperature`, `mold`, `climate`, `target_temperature` (* required) – plus **own thresholds per room**: `temp_min`, `temp_max`, `hum_min`, `hum_max`, `mold_warn`, `mold_alarm`, `co2_warn`, `co2_alarm`, `frsi`, `vent_threshold`, `aq_warn`, `aq_alarm` – plus **air quality**: `voc`, `pm25`, `pm10`, `presence` (binary_sensor = present/absent, sensor/input_number = number of persons), `volume` (m³), `persons`, `ach`
+**Room options:** `name`, `icon`, `temperature`*, `humidity`*, `window`, `co2`, `wall_temperature`, `wall_learn`, `mold`, `climate`, `target_temperature` (* required) – plus **own thresholds per room**: `temp_min`, `temp_max`, `hum_min`, `hum_max`, `mold_warn`, `mold_alarm`, `co2_warn`, `co2_alarm`, `frsi`, `vent_threshold`, `aq_warn`, `aq_alarm` – plus **air quality**: `voc`, `pm25`, `pm10`, `presence` (binary_sensor = present/absent, sensor/input_number = number of persons), `volume` (m³), `persons`, `ach`
 
 ```yaml
   - name: Bathroom          # bathroom may be more humid
@@ -123,6 +124,15 @@ Everything below can also be set in the **visual editor** (sections: Outdoor sen
     persons: 2
 ```
 
+### Self-learning wall spots / Selbstlernende Wandpunkte
+
+1. **Create a helper / Helfer anlegen:** *Settings → Devices & services → Helpers → Create helper → Text*, e.g. `Aura wall bedroom` → `input_text.aura_wall_bedroom` (default max. length 100 is enough).
+2. **Assign it to the room / Beim Raum eintragen:** `wall_learn: input_text.aura_wall_bedroom` (editor: *Wall spot learning storage*).
+3. **Measure / Messen:** tap the *wall surface* tile, enter the measured temperature of the coldest spot. Needs ≥ 8 K difference between indoor and the 12 h outdoor average (walls react slowly). Several measurements are averaged; outliers count less.
+4. **Automatic / Automatisch:** if the room also has `wall_temperature`, the card learns from its history (non-overlapping windows, ≥ 6 h). Remove the sensor later – the learned value stays.
+
+The tile then shows *learned · n measurements* and the mold risk uses your real wall factor. "Reset learned values" in the panel starts over.
+
 > Tip: if your mold warning fires too often in a well-insulated building, raise `frsi` to 0.8 – or add a real wall temperature sensor (e.g. a sensor stuck to the coldest outer-wall corner) via `wall_temperature`.
 
 ---
@@ -132,6 +142,7 @@ Everything below can also be set in the **visual editor** (sections: Outdoor sen
 ### Funktionen
 - **Pro Raum:** Temperatur, Luftfeuchte, Taupunkt, absolute Feuchte (g/m³), optional CO₂, Fenster, Thermostat, Wandtemperatur und Schimmelsensor
 - **Schimmelrisiko ohne Schimmelsensor:** Die Karte schätzt aus Innen- und Außentemperatur die Temperatur der kältesten Wandstelle (Temperaturfaktor fRsi, Standard 0,7 = Mindestwärmeschutz nach DIN 4108-2) und berechnet die relative Feuchte direkt an der Wand. Ab 80 % über längere Zeit kann Schimmel wachsen.
+- **Selbstlernende Wandpunkte:** Kälteste Stelle mit IR-Thermometer messen, auf die Kachel *Wandoberfläche* tippen und Wert eintragen – die Karte lernt den echten Wandfaktor (fRsi) des Raums. Oder einen Temperatursensor ein paar Tage an die kalte Ecke kleben: Die Karte lernt automatisch, danach kann der Sensor in den nächsten Raum wandern. Gespeichert in einem `input_text`-Helfer pro Raum (siehe unten).
 - **Schimmelstunden:** wie viele Stunden die Wandstelle im Verlaufszeitraum über der Alarmschwelle lag – entscheidend ist die Dauer, nicht kurze Spitzen.
 - **Lüftungsempfehlung mit Begründung:** vergleicht die absolute Feuchte innen und außen – sagt dir, wann Lüften wirklich hilft und wann die Außenluft zu feucht ist. Mit Stoßlüft-Dauer je nach Außentemperatur und erwarteter Feuchte nach dem Lüften.
 - **Luftqualitäts-Score (0–100)** pro Raum aus CO₂, VOC, PM2.5 und PM10 – der schlechteste Wert zählt und wird genannt („Feinstaub PM2.5“).

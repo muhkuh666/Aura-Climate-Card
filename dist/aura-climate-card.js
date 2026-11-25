@@ -2,7 +2,7 @@
  * Aura Climate Card – Raumklima, Schimmelrisiko & Lüftungsempfehlung für Home Assistant
  * MIT © muhkuh666 – https://github.com/muhkuh666/Aura-Climate-Card
  */
-const AURA_VERSION = "1.3.0";
+const AURA_VERSION = "1.4.0";
 
 /* ------------------------------------------------------------------ */
 /*  Texte                                                              */
@@ -63,6 +63,26 @@ const AURA_I18N = {
     r_cooler: "Draußen {o} °C – kühler als drinnen",
     r_nooutdoor: "Ohne Außensensor kein Feuchtevergleich möglich",
     r_co2_est: "CO₂ geschätzt über {v} ppm",
+    wall_learned: "gelernt · {n} Messung|gelernt · {n} Messungen",
+    wl_title: "Wandpunkt messen",
+    wl_hint: "Kälteste Stelle (Außenwandecke, Fensterlaibung, hinter Schrank) mit IR-Thermometer messen und Wert eintragen. Am besten an kalten Tagen.",
+    wl_input: "Gemessene Wandtemperatur (°C)",
+    wl_save: "Übernehmen",
+    wl_reset: "Gelerntes löschen",
+    wl_close: "Schließen",
+    wl_now: "Wandfaktor fRsi {f} · {src}",
+    wl_src_norm: "Normwert",
+    wl_src_room: "eigener Wert",
+    wl_src_learned: "gelernt aus {n} Messung(en)",
+    wl_calc: "Außen Ø 12 h: {o} °C · innen {i} °C",
+    wl_err_dt: "Draußen zu warm: mindestens 8 K Unterschied innen/außen nötig (aktuell {d} K).",
+    wl_err_range: "Unplausibel (fRsi {f}) – bitte nachmessen.",
+    wl_err_num: "Bitte eine Temperatur eingeben, z. B. 12,5.",
+    wl_err_noent: "Kein Lernspeicher (input_text) für diesen Raum eingetragen.",
+    wl_err_write: "Speichern fehlgeschlagen: {e}",
+    wl_ok: "Gespeichert: Messung ergibt fRsi {fi} → gelernt {f}",
+    wl_outlier: "Starke Abweichung – schwächer gewichtet.",
+    wl_auto: "Wandsensor lernt automatisch mit",
     r_aq: "Luftqualität {l}: {w}",
     aq: "Luftqualität",
     aq_1: "sehr gut",
@@ -142,6 +162,26 @@ const AURA_I18N = {
     r_cooler: "Outside {o} °C – cooler than inside",
     r_nooutdoor: "No outdoor sensor – humidity comparison unavailable",
     r_co2_est: "CO₂ estimated above {v} ppm",
+    wall_learned: "learned · {n} measurement|learned · {n} measurements",
+    wl_title: "Measure wall spot",
+    wl_hint: "Measure the coldest spot (outer wall corner, window reveal, behind a wardrobe) with an IR thermometer and enter the value. Best on cold days.",
+    wl_input: "Measured wall temperature (°C)",
+    wl_save: "Apply",
+    wl_reset: "Reset learned values",
+    wl_close: "Close",
+    wl_now: "Wall factor fRsi {f} · {src}",
+    wl_src_norm: "standard value",
+    wl_src_room: "own value",
+    wl_src_learned: "learned from {n} measurement(s)",
+    wl_calc: "Outdoor 12 h avg: {o} °C · indoor {i} °C",
+    wl_err_dt: "Too warm outside: at least 8 K difference indoor/outdoor needed (now {d} K).",
+    wl_err_range: "Implausible (fRsi {f}) – please measure again.",
+    wl_err_num: "Please enter a temperature, e.g. 12.5.",
+    wl_err_noent: "No learning storage (input_text) set for this room.",
+    wl_err_write: "Saving failed: {e}",
+    wl_ok: "Saved: measurement gives fRsi {fi} → learned {f}",
+    wl_outlier: "Large deviation – weighted less.",
+    wl_auto: "Wall sensor is learning automatically",
     r_aq: "Air quality {l}: {w}",
     aq: "Air quality",
     aq_1: "excellent",
@@ -451,11 +491,131 @@ class AuraClimateCard extends HTMLElement {
 
   _cfgFor(room) {
     const c = { ...this._config };
+    c.frsiSrc = "norm";
     AURA_ROOM_OVERRIDES.forEach((k) => {
       const v = room?.[k];
-      if (v !== undefined && v !== null && v !== "" && isFinite(Number(v))) c[k] = Number(v);
+      if (v !== undefined && v !== null && v !== "" && isFinite(Number(v))) {
+        c[k] = Number(v);
+        if (k === "frsi") c.frsiSrc = "room";
+      }
     });
+    const L = this._learned(room);
+    if (L && L.n > 0) {
+      c.frsi = L.f;
+      c.frsiSrc = "learned";
+      c.frsiN = L.n;
+    }
     return c;
+  }
+
+  /* ---------- Wandpunkt-Lernen ----------
+     Speicher (input_text): "f;w;n;tMess;tAuto"
+     f = gelernter Wandfaktor, w = Summe der Gewichte (gedeckelt), n = Anzahl Messungen */
+  _learned(room) {
+    const st = this._st(room?.wall_learn);
+    if (!st) return null;
+    const p = String(st.state || "").split(";");
+    const f = parseFloat(p[0]);
+    if (!isFinite(f)) return { f: null, w: 0, n: 0, tm: 0, ta: 0 };
+    return { f, w: parseFloat(p[1]) || 0, n: parseInt(p[2]) || 0, tm: (parseInt(p[3]) || 0) * 1000, ta: (parseInt(p[4]) || 0) * 1000 };
+  }
+  async _saveLearned(room, L) {
+    const v = `${L.f.toFixed(3)};${L.w.toFixed(2)};${L.n};${Math.round(L.tm / 1000)};${Math.round(L.ta / 1000)}`;
+    await this._hass.callService("input_text", "set_value", { entity_id: room.wall_learn, value: v });
+  }
+  _blend(L, fi, wi) {
+    const base = L && L.n > 0 && isFinite(L.f) ? L : { f: fi, w: 0, n: 0, tm: 0, ta: L?.ta || 0 };
+    const w = base.w + wi;
+    return { ...base, f: (base.f * base.w + fi * wi) / w, w: Math.min(w, 20), n: base.n + 1 };
+  }
+  // zeitgewichteter Mittelwert einer Treppenfunktion über [from, to]
+  _mean(series, from, to) {
+    if (!series?.length) return null;
+    let sum = 0,
+      dur = 0,
+      v = this._at(series, from),
+      t = from;
+    for (const p of series) {
+      if (p.t <= from) continue;
+      if (p.t >= to) break;
+      if (v != null) {
+        sum += v * (p.t - t);
+        dur += p.t - t;
+      }
+      v = p.v;
+      t = p.t;
+    }
+    if (v != null) {
+      sum += v * (to - t);
+      dur += to - t;
+    }
+    return dur > 0 ? sum / dur : null;
+  }
+  // Wände reagieren träge → Außentemperatur als Mittel der letzten 12 h
+  _outdoorLag() {
+    const O = this._hist?.map?.[this._config.outdoor_temperature];
+    const now = Date.now();
+    const m = O ? this._mean(O, now - 12 * 3600e3, now) : null;
+    return m ?? this._outdoor().t;
+  }
+  async _measureWall(idx, tw) {
+    const room = this._rooms[idx];
+    const L0 = this._learned(room);
+    const msg = (k, v = {}) => ({ ok: false, text: this._t(k, v) });
+    if (!L0) return msg("wl_err_noent");
+    const tin = this._num(room.temperature);
+    const tout = this._outdoorLag();
+    if (!isFinite(tw)) return msg("wl_err_num");
+    if (tin == null || tout == null) return msg("wl_err_dt", { d: "–" });
+    const dT = tin - tout;
+    if (dT < 8) return msg("wl_err_dt", { d: this._n(dT, 1) });
+    const fi = (tw - tout) / dT;
+    if (fi < 0.3 || fi > 1.02) return msg("wl_err_range", { f: this._n(fi, 2) });
+    let wi = Math.min(1, dT / 15);
+    let outlier = false;
+    if (L0.n >= 3 && Math.abs(fi - L0.f) > 0.15) {
+      wi *= 0.3;
+      outlier = true;
+    }
+    const L = this._blend(L0, Math.min(1, fi), wi);
+    L.tm = Date.now();
+    try {
+      await this._saveLearned(room, L);
+    } catch (e) {
+      return msg("wl_err_write", { e: e?.message || e });
+    }
+    return { ok: true, text: this._t("wl_ok", { fi: this._n(fi, 2), f: this._n(L.f, 2) }) + (outlier ? " " + this._t("wl_outlier") : "") };
+  }
+  // automatisch lernen, solange ein Wandsensor im Raum hängt (nicht überlappende Zeitfenster)
+  async _autoLearn() {
+    const h = this._hist;
+    if (!h) return;
+    for (const room of this._rooms) {
+      if (!room.wall_temperature || !room.wall_learn) continue;
+      const L0 = this._learned(room);
+      if (!L0 || h.to - L0.ta < (h.to - h.from) * 0.98) continue;
+      const W = h.map[room.wall_temperature],
+        T = h.map[room.temperature],
+        O = h.map[this._config.outdoor_temperature];
+      if (!W?.length || !T?.length || !O?.length) continue;
+      const from = Math.max(h.from, W[0].t);
+      const hours = (h.to - from) / 3600e3;
+      if (hours < 6) continue;
+      const tw = this._mean(W, from, h.to),
+        ti = this._mean(T, from, h.to),
+        to = this._mean(O, from, h.to);
+      if (tw == null || ti == null || to == null || ti - to < 8) continue;
+      const fi = (tw - to) / (ti - to);
+      if (fi < 0.3 || fi > 1.02) continue;
+      const wi = Math.min(1, hours / 24) * Math.min(1, (ti - to) / 15) * 1.5;
+      const L = this._blend(L0, Math.min(1, fi), wi);
+      L.ta = h.to;
+      try {
+        await this._saveLearned(room, L);
+      } catch (e) {
+        console.warn("aura-climate-card: auto-learn", e);
+      }
+    }
   }
   _ventMinutes(tout) {
     const c = this._config;
@@ -593,7 +753,8 @@ class AuraClimateCard extends HTMLElement {
       a.wallEst = false;
     } else if (out.hasT) {
       a.wall = Phys.wall(t, out.t, Number(c.frsi));
-      a.wallEst = true;
+      a.wallEst = c.frsiSrc !== "learned";
+      a.wallLearned = c.frsiSrc === "learned";
     } else {
       a.wall = t - 3;
       a.wallEst = true;
@@ -732,6 +893,7 @@ class AuraClimateCard extends HTMLElement {
       this._histAt = Date.now();
       this._sig = "";
       this._update();
+      this._autoLearn();
     } catch (e) {
       this._histAt = Date.now();
       console.warn("aura-climate-card: history", e);
@@ -788,15 +950,19 @@ class AuraClimateCard extends HTMLElement {
   /* ---------- Rendering ---------- */
   _update() {
     if (!this._hass || !this._config) return;
+    if (this._typing) {
+      this._pending = true;
+      return;
+    }
     const c = this._config;
     const ids = [c.outdoor_temperature, c.outdoor_humidity];
-    this._rooms.forEach((r) => ids.push(r.temperature, r.humidity, r.window, r.co2, r.wall_temperature, r.mold, r.climate, r.voc, r.pm25, r.pm10, r.presence));
+    this._rooms.forEach((r) => ids.push(r.temperature, r.humidity, r.window, r.co2, r.wall_temperature, r.mold, r.climate, r.voc, r.pm25, r.pm10, r.presence, r.wall_learn));
     const sig = ids
       .map((i) => {
         const s = this._st(i);
         return s ? s.state + "|" + (s.attributes?.temperature ?? "") + "|" + (s.attributes?.hvac_action ?? "") + "|" + s.last_changed : "";
       })
-      .join(";") + `#${this._sel}#${this._detail}#${this._lang}`;
+      .join(";") + `#${this._sel}#${this._detail}#${this._lang}#${this._wallPanel}#${this._wallMsg?.text || ""}`;
     if (sig === this._sig) return;
     this._sig = sig;
     this._render();
@@ -969,8 +1135,9 @@ class AuraClimateCard extends HTMLElement {
         ic: "wall",
         label: this._t("wall"),
         val: `${this._n(a.wall, this._dT)} °C`,
-        sub: this._t(a.wallEst ? "wall_est" : "wall_meas"),
-        ent: r.wall_temperature || c.outdoor_temperature,
+        sub: a.wallLearned ? this._t("wall_learned", { n: a.cfg.frsiN }) : this._t(a.wallEst ? "wall_est" : "wall_meas"),
+        ent: r.wall_learn ? "" : r.wall_temperature || c.outdoor_temperature,
+        attr: r.wall_learn ? ` data-wall="${this._all.indexOf(a)}"` : "",
         cls: a.condensation ? "lv-alarm" : "",
       },
     ];
@@ -1033,6 +1200,7 @@ class AuraClimateCard extends HTMLElement {
 
     tiles = tiles.filter((t) => c[t.k] !== false);
     const sections = [];
+    if (r.wall_learn && this._wallPanel === this._all.indexOf(a)) sections.push(this._renderWallPanel(a));
     if (c.show_ventilation) sections.push(this._renderVent(a));
     if (c.show_mold) sections.push(this._renderMold(a));
     const charts = [];
@@ -1044,7 +1212,7 @@ class AuraClimateCard extends HTMLElement {
         ${c.show_gauge ? this._renderGauge(a) : ""}
         ${tiles.length ? `<div class="tiles">${tiles
           .map(
-            (t) => `<button class="tile ${t.cls || ""}" data-entity="${esc(t.ent || "")}">
+            (t) => `<button class="tile ${t.cls || ""}" data-entity="${esc(t.ent || "")}"${t.attr || ""}>
               ${icon(t.ic)}<div><div class="tl">${t.label}</div><div class="tv">${t.val}</div>${t.sub ? `<div class="ts">${t.sub}</div>` : ""}</div>
             </button>`
           )
@@ -1084,6 +1252,25 @@ class AuraClimateCard extends HTMLElement {
         <div class="ghum" data-entity="${esc(a.room.humidity)}">${icon("drop")}${this._n(a.rh, this._dH)} %</div>
         <div class="gcomf ${a.comfort.length ? "bad" : ""}">${comfort}</div>
       </button>
+    </div>`;
+  }
+
+  _renderWallPanel(a) {
+    const c = a.cfg;
+    const src =
+      c.frsiSrc === "learned" ? this._t("wl_src_learned", { n: c.frsiN }) : c.frsiSrc === "room" ? this._t("wl_src_room") : this._t("wl_src_norm");
+    const msg = this._wallMsg;
+    return `<div class="wpanel">
+      <div class="wph">${icon("wall")}<b>${this._t("wl_title")}</b><button class="wx" data-wclose="1" aria-label="${this._t("wl_close")}">✕</button></div>
+      <div class="wpt">${this._t("wl_hint")}</div>
+      <div class="wpt dim">${this._t("wl_now", { f: this._n(c.frsi, 2), src })} · ${this._t("wl_calc", { o: this._n(this._outdoorLag(), 1), i: this._n(a.t, 1) })}</div>
+      ${a.room.wall_temperature ? `<div class="wpt dim">${this._t("wl_auto")}</div>` : ""}
+      <div class="wrow">
+        <input class="win" type="text" inputmode="decimal" autocomplete="off" placeholder="${this._t("wl_input")}" value="${esc(this._wallInput ?? "")}">
+        <button class="wbtn pri" data-wsave="1">${this._t("wl_save")}</button>
+        ${c.frsiSrc === "learned" ? `<button class="wbtn" data-wreset="1">${this._t("wl_reset")}</button>` : ""}
+      </div>
+      ${msg ? `<div class="wmsg ${msg.ok ? "ok" : "bad"}">${esc(msg.text)}</div>` : ""}
     </div>`;
   }
 
@@ -1248,6 +1435,54 @@ hy = [10, 90];
         this._update();
       })
     );
+    const rerender = () => {
+      this._sig = "";
+      this._update();
+    };
+    root.querySelectorAll("[data-wall]").forEach((b) =>
+      b.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        const i = Number(b.dataset.wall);
+        this._wallPanel = this._wallPanel === i ? null : i;
+        this._wallMsg = null;
+        rerender();
+      })
+    );
+    root.querySelector("[data-wclose]")?.addEventListener("click", () => {
+      this._wallPanel = null;
+      this._wallMsg = null;
+      rerender();
+    });
+    const inp = root.querySelector(".win");
+    if (inp) {
+      inp.addEventListener("focus", () => (this._typing = true));
+      inp.addEventListener("input", () => (this._wallInput = inp.value));
+      inp.addEventListener("blur", () => {
+        this._typing = false;
+        if (this._pending) {
+          this._pending = false;
+          setTimeout(rerender, 200);
+        }
+      });
+      inp.addEventListener("keydown", (ev) => ev.key === "Enter" && root.querySelector("[data-wsave]")?.click());
+    }
+    root.querySelector("[data-wsave]")?.addEventListener("click", async () => {
+      const v = parseFloat(String(inp?.value ?? "").replace(",", "."));
+      this._typing = false;
+      this._wallMsg = await this._measureWall(this._wallPanel, v);
+      if (this._wallMsg.ok) this._wallInput = "";
+      rerender();
+    });
+    root.querySelector("[data-wreset]")?.addEventListener("click", async () => {
+      const room = this._rooms[this._wallPanel];
+      try {
+        await this._hass.callService("input_text", "set_value", { entity_id: room.wall_learn, value: "-" });
+        this._wallMsg = null;
+      } catch (e) {
+        this._wallMsg = { ok: false, text: this._t("wl_err_write", { e: e?.message || e }) };
+      }
+      rerender();
+    });
     if (this._config.tap_action === "none") return;
     root.querySelectorAll("[data-entity]").forEach((b) =>
       b.addEventListener("click", (ev) => {
@@ -1339,6 +1574,15 @@ hy = [10, 90];
     .tick{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--card-bg);transform:translateX(-1px)}
     .mark{position:absolute;top:50%;width:16px;height:16px;border-radius:50%;background:var(--card-bg);border:3px solid var(--primary-text-color);transform:translate(-50%,-50%);box-sizing:border-box}
     .msub{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:.75em;color:var(--secondary-text-color)}
+    .wpanel{margin-top:12px;padding:12px 14px;border-radius:16px;background:var(--soft);border:1px solid color-mix(in srgb,var(--hum) 35%,transparent)}
+    .wph{display:flex;align-items:center;gap:8px}.wph b{flex:1}
+    .wx{color:var(--secondary-text-color);padding:2px 6px;border-radius:6px}
+    .wpt{font-size:.82em;margin-top:6px;line-height:1.35}
+    .wrow{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+    .win{flex:1;min-width:150px;font:inherit;padding:8px 10px;border-radius:10px;border:1px solid var(--divider-color,#8884);background:var(--card-bg);color:var(--primary-text-color)}
+    .wbtn{padding:8px 14px;border-radius:10px;background:var(--soft2);font-weight:600}
+    .wbtn.pri{background:var(--hum);color:#fff}
+    .wmsg{margin-top:8px;font-size:.85em;font-weight:600}.wmsg.ok{color:var(--ok)}.wmsg.bad{color:var(--alarm)}
     .cond{display:flex;align-items:center;gap:6px;margin-top:8px;color:var(--alarm);font-weight:600;font-size:.88em}
     .charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin-top:12px}
     .chart{padding:10px 12px 6px;border-radius:16px;background:var(--soft)}
@@ -1370,6 +1614,9 @@ hy = [10, 90];
 const ED_I18N = {
   de: {
     title: "Titel",
+    wall_learn: "Wandpunkt-Lernspeicher (input_text, optional)",
+    wall_learn_help: "Helfer anlegen: Einstellungen → Geräte & Dienste → Helfer → Text, z. B. „Aura Wand Schlafzimmer“. Danach auf die Kachel Wandoberfläche tippen und eine Messung eintragen.",
+    wall_temperature_help: "Mit Lernspeicher kann der Sensor nach ein paar Tagen in den nächsten Raum wandern – der gelernte Wert bleibt.",
     g_air: "Luftqualität & CO₂-Schätzung",
     r_air: "Luftqualität & CO₂-Schätzung",
     show_air_quality: "Luftqualität",
@@ -1494,6 +1741,9 @@ const ED_I18N = {
   },
   en: {
     title: "Title",
+    wall_learn: "Wall spot learning storage (input_text, optional)",
+    wall_learn_help: "Create a helper: Settings → Devices & services → Helpers → Text, e.g. “Aura wall bedroom”. Then tap the wall surface tile and enter a measurement.",
+    wall_temperature_help: "With learning storage the sensor can move on to the next room after a few days – the learned value stays.",
     g_air: "Air quality & CO₂ estimate",
     r_air: "Air quality & CO₂ estimate",
     show_air_quality: "Air quality",
@@ -1759,6 +2009,7 @@ class AuraClimateCardEditor extends HTMLElement {
         ],
       },
       ent("wall_temperature", "sensor", "temperature"),
+      ent("wall_learn", "input_text"),
       ent("mold", "sensor"),
       ent("climate", "climate"),
       num("target_temperature", 5, 30, 0.5),
@@ -1851,6 +2102,7 @@ class AuraClimateCardEditor extends HTMLElement {
       f.schema = this._roomSchema();
       f.data = room;
       f.computeLabel = label;
+      f.computeHelper = (sc) => (sc.name === "wall_learn" ? l.wall_learn_help : sc.name === "wall_temperature" ? l.wall_temperature_help : undefined);
       f.addEventListener("value-changed", (ev) => {
         const v = { ...ev.detail.value };
         Object.keys(v).forEach((k) => (v[k] === "" || v[k] === undefined || v[k] === null) && delete v[k]);
