@@ -26,6 +26,7 @@
 - **Window timer:** "open for 14 min – close the window", plus an alarm when the heating runs with the window open.
 - **Comfort chart:** all rooms as dots in a temperature/humidity diagram with comfort zone.
 - **History:** temperature & humidity of the selected room (1–168 h).
+- **Blinking rooms:** rooms with a warning pulse in the tabs and grid – on warning and alarm, alarm only or off.
 - **Layouts:** room tabs (detail) or grid (all rooms, tap a tile for details).
 - **Fully configurable** in the visual editor: every section and tile can be hidden, thresholds per room, ventilation durations, decimals, chart range, font size, colors. German & English.
 
@@ -68,6 +69,8 @@ Everything below can also be set in the **visual editor** (sections: Outdoor sen
 | **Sections** | | |
 | `show_title`, `show_outdoor`, `show_summary`, `show_tabs`, `show_gauge` | `true` | Header, outdoor values, summary bar, room tabs, gauge |
 | `tabs_mode` | `wrap` | Many rooms: `wrap` (multiple lines) or `scroll` (arrows, mouse wheel) |
+| `blink` | `warn` | Blink rooms in tabs/grid: `warn` (warning + alarm), `alarm` (alarm only), `off` |
+| `blink_speed` | `1.2` | Blink period in seconds |
 | `show_ventilation`, `show_mold`, `show_comfort_chart`, `show_history` | `true` | Main sections |
 | `font_scale` | `100` | Font size in % (60–160) |
 | `grid_min_width` | `150` | Grid layout: minimum tile width (px) |
@@ -136,6 +139,7 @@ Everything below can also be set in the **visual editor** (sections: Outdoor sen
 - **Fenster-Timer:** „seit 14 min offen – Fenster schließen“ und Alarm, wenn bei offenem Fenster geheizt wird.
 - **Behaglichkeitsdiagramm:** alle Räume als Punkte im Temperatur-/Feuchte-Diagramm mit Wohlfühlbereich.
 - **Verlauf:** Temperatur & Feuchte des gewählten Raums (1–168 h).
+- **Blinkende Räume:** Räume mit Warnung pulsieren in Tabs und Raster – bei Warnung und Alarm, nur bei Alarm oder aus.
 - **Darstellung:** Raum-Tabs (Detail) oder Raster (alle Räume, Kachel antippen für Details).
 - **Voll konfigurierbar** im grafischen Editor: jeder Bereich und jede Kachel ausblendbar, eigene Grenzwerte pro Raum (z. B. Bad darf feuchter sein), Lüftungsdauern, Nachkommastellen, Diagrammbereich, Schriftgröße, Farben. Deutsch & Englisch.
 

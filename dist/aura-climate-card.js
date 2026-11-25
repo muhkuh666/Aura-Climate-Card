@@ -2,7 +2,7 @@
  * Aura Climate Card – Raumklima, Schimmelrisiko & Lüftungsempfehlung für Home Assistant
  * MIT © muhkuh666 – https://github.com/muhkuh666/Aura-Climate-Card
  */
-const AURA_VERSION = "1.2.1";
+const AURA_VERSION = "1.3.0";
 
 /* ------------------------------------------------------------------ */
 /*  Texte                                                              */
@@ -178,6 +178,8 @@ const AURA_DEFAULTS = {
   show_summary: true,
   show_tabs: true,
   tabs_mode: "wrap",
+  blink: "warn",
+  blink_speed: 1.2,
   show_gauge: true,
   show_ventilation: true,
   show_mold: true,
@@ -900,11 +902,21 @@ class AuraClimateCard extends HTMLElement {
     return `<div class="summary lv-${lv}">${icon(worst >= 2 ? "alert" : "check")}<span>${parts.join(" · ")}</span></div>`;
   }
 
+  // Blink-Klasse + Phasenversatz, damit die Animation bei Neuzeichnen nicht neu startet
+  _blink(a) {
+    const c = this._config;
+    if (!c.blink || c.blink === "off") return { cls: "", style: "" };
+    const min = c.blink === "alarm" ? LEVEL.alarm : LEVEL.warn;
+    if ((LEVEL[a.level] || 0) < min) return { cls: "", style: "" };
+    const dur = Math.max(0.4, Math.min(5, Number(c.blink_speed) || 1.2)) * 1000;
+    return { cls: " blink", style: ` style="animation-duration:${dur}ms;animation-delay:-${Date.now() % dur}ms"` };
+  }
+
   _renderTabs(all, idx) {
     const c = this._config;
     if (c.layout === "grid") {
       return `<div class="tabswrap wrap"><div class="tabs"><button class="tab back" data-back="1">${icon("back")}${this._t("back")}</button>
-        <span class="tab sel"><i class="dot lv-${all[idx].level}"></i>${esc(all[idx].room.name || "–")}</span></div></div>`;
+        <span class="tab sel lv-${all[idx].level}${this._blink(all[idx]).cls}"${this._blink(all[idx]).style}><i class="dot lv-${all[idx].level}"></i>${esc(all[idx].room.name || "–")}</span></div></div>`;
     }
     if (all.length < 2 || !c.show_tabs) return "";
     const scroll = c.tabs_mode === "scroll";
@@ -912,7 +924,7 @@ class AuraClimateCard extends HTMLElement {
       ${scroll ? `<button class="tarr l" data-tscroll="-1" aria-label="‹">${icon("back")}</button>` : ""}
       <div class="tabs">${all
       .map(
-        (a, i) => `<button class="tab ${i === idx ? "sel" : ""}" data-room="${i}">
+        (a, i) => `<button class="tab lv-${a.level} ${i === idx ? "sel" : ""}${this._blink(a).cls}"${this._blink(a).style} data-room="${i}">
           ${a.room.icon ? `<ha-icon icon="${esc(a.room.icon)}"></ha-icon>` : `<i class="dot lv-${a.level}"></i>`}
           ${esc(a.room.name || `#${i + 1}`)}
           ${a.room.icon && a.level !== "ok" ? `<i class="dot lv-${a.level}"></i>` : ""}
@@ -928,7 +940,7 @@ class AuraClimateCard extends HTMLElement {
     return `<div class="grid">${all
       .map((a, i) => {
         const v = a.valid;
-        return `<button class="gtile lv-${a.level}" data-detail="${i}">
+        return `<button class="gtile lv-${a.level}${this._blink(a).cls}"${this._blink(a).style} data-detail="${i}">
           <div class="gname">${a.room.icon ? `<ha-icon icon="${esc(a.room.icon)}"></ha-icon>` : ""}<span>${esc(a.room.name || `#${i + 1}`)}</span><i class="dot lv-${a.level}"></i></div>
           <div class="gvals"><span class="gt">${v ? this._n(a.t, this._dT) : "–"}<small>°C</small></span>
           <span class="gh">${icon("drop")}${v ? this._n(a.rh, this._dH) : "–"}<small>%</small></span></div>
@@ -1274,6 +1286,13 @@ hy = [10, 90];
     .can-l .tarr.l,.can-r .tarr.r{display:flex}
     .tab{display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;background:var(--soft);white-space:nowrap;font-size:.9em}
     .tab.sel{background:color-mix(in srgb,var(--hum) 22%,transparent);font-weight:600}
+    @keyframes aura-blink{0%,100%{background:color-mix(in srgb,var(--c) 10%,var(--soft));box-shadow:0 0 0 0 color-mix(in srgb,var(--c) 0%,transparent)}
+      50%{background:color-mix(in srgb,var(--c) 42%,transparent);box-shadow:0 0 0 3px color-mix(in srgb,var(--c) 30%,transparent)}}
+    @keyframes aura-blink-tile{0%,100%{border-color:color-mix(in srgb,var(--c) 35%,transparent);box-shadow:0 0 0 0 transparent}
+      50%{border-color:var(--c);box-shadow:0 0 14px 1px color-mix(in srgb,var(--c) 45%,transparent)}}
+    .tab.blink{animation:aura-blink 1.2s ease-in-out infinite}
+    .tab.blink.sel{outline:2px solid color-mix(in srgb,var(--hum) 70%,transparent);outline-offset:1px}
+    .gtile.blink{animation:aura-blink-tile 1.2s ease-in-out infinite}
     .tab ha-icon{--mdc-icon-size:18px}
     .main{display:grid;grid-template-columns:minmax(170px,210px) 1fr;gap:14px;align-items:center;margin-top:12px}
     .main.nogauge,.main.notiles{grid-template-columns:1fr}
@@ -1388,6 +1407,11 @@ const ED_I18N = {
     tabs_mode: "Raum-Tabs bei vielen Räumen",
     tm_wrap: "Umbrechen (mehrzeilig)",
     tm_scroll: "Scrollen mit Pfeilen",
+    blink: "Räume mit Warnung blinken",
+    bl_warn: "Bei Warnung und Alarm",
+    bl_alarm: "Nur bei Alarm",
+    bl_off: "Aus",
+    blink_speed: "Blinkdauer (Sekunden)",
     show_gauge: "Rundanzeige",
     show_dewpoint: "Taupunkt",
     show_abs_humidity: "Absolute Feuchte",
@@ -1507,6 +1531,11 @@ const ED_I18N = {
     tabs_mode: "Room tabs with many rooms",
     tm_wrap: "Wrap (multiple lines)",
     tm_scroll: "Scroll with arrows",
+    blink: "Blink rooms with warnings",
+    bl_warn: "On warning and alarm",
+    bl_alarm: "Alarm only",
+    bl_off: "Off",
+    blink_speed: "Blink period (seconds)",
     show_gauge: "Gauge",
     show_dewpoint: "Dew point",
     show_abs_humidity: "Absolute humidity",
@@ -1663,6 +1692,10 @@ class AuraClimateCardEditor extends HTMLElement {
       ]),
       sec("g_layout", l.g_layout, "mdi:view-dashboard-outline", [
         bools(["show_title", "show_outdoor", "show_summary", "show_tabs", "show_gauge", "show_ventilation", "show_mold", "show_comfort_chart", "show_history"]),
+        { type: "grid", name: "", schema: [
+          { name: "blink", selector: { select: { mode: "dropdown", options: [{ value: "warn", label: l.bl_warn }, { value: "alarm", label: l.bl_alarm }, { value: "off", label: l.bl_off }] } } },
+          { name: "blink_speed", selector: { number: { min: 0.4, max: 5, step: 0.1, mode: "box", unit_of_measurement: "s" } } },
+        ] },
         { name: "tabs_mode", selector: { select: { mode: "dropdown", options: [{ value: "wrap", label: l.tm_wrap }, { value: "scroll", label: l.tm_scroll }] } } },
         { type: "grid", name: "", schema: [num("font_scale", 60, 160, 5), num("grid_min_width", 100, 400, 10)] },
       ]),
