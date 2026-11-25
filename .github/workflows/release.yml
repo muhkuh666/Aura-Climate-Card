@@ -1,0 +1,31 @@
+name: Auto-Release
+# Erstellt automatisch ein Release, sobald AURA_VERSION in dist/aura-climate-card.js erhöht wurde.
+on:
+  push:
+    branches: [main]
+    paths: ["dist/aura-climate-card.js"]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Version lesen
+        id: v
+        run: |
+          V=$(grep -oP 'AURA_VERSION = "\K[0-9.]+' dist/aura-climate-card.js)
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          if git rev-parse "v$V" >/dev/null 2>&1; then echo "exists=true" >> "$GITHUB_OUTPUT"; else echo "exists=false" >> "$GITHUB_OUTPUT"; fi
+      - name: Release erstellen
+        if: steps.v.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V=${{ steps.v.outputs.version }}
+          NOTES="RELEASE_NOTES.md"
+          [ -f "$NOTES" ] || printf "Aura Climate Card v%s\n\n☕ https://buymeacoffee.com/muhkuh666\n" "$V" > "$NOTES"
+          gh release create "v$V" dist/aura-climate-card.js --title "v$V" --notes-file "$NOTES"

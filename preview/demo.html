@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="de"><head><meta charset="utf-8"><title>Aura Climate Card – Demo</title>
+<style>
+  body{margin:0;padding:24px;font-family:Roboto,"Segoe UI",system-ui,sans-serif;font-size:14px;
+    background:#111318;--primary-text-color:#e6e8ee;--secondary-text-color:#9aa1ad;--card-background-color:#1c1f26;--divider-color:#2c313b}
+  body.light{background:#eef1f5;--primary-text-color:#1d2330;--secondary-text-color:#687385;--card-background-color:#fff;--divider-color:#e0e4ea}
+  .row{display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap}
+  ha-card{display:block;background:var(--card-background-color);border-radius:16px;box-shadow:0 2px 10px rgba(0,0,0,.25)}
+  .w1{width:560px}.w2{width:460px}
+</style></head>
+<body>
+<div class="row">
+  <div class="w1" id="c1"></div>
+  <div class="w2" id="c2"></div>
+</div>
+<script>customElements.define("ha-card", class extends HTMLElement {});</script>
+<script src="../dist/aura-climate-card.js"></script>
+<script>
+const now = Date.now(), min = 60e3;
+const S = (id, state, attrs = {}, ago = 30) => [id, { entity_id: id, state: String(state), attributes: attrs, last_changed: new Date(now - ago * min).toISOString() }];
+const states = Object.fromEntries([
+  S("sensor.aussen_temperatur", 3.5, { device_class: "temperature" }),
+  S("sensor.aussen_feuchte", 88, { device_class: "humidity" }),
+  S("sensor.wz_temp", 21.4), S("sensor.wz_hum", 52), S("sensor.wz_co2", 820), S("binary_sensor.wz_fenster", "off"),
+  S("climate.wohnzimmer", "heat", { temperature: 21.5, hvac_action: "idle" }),
+  S("sensor.sz_temp", 17.6), S("sensor.sz_hum", 69), S("binary_sensor.sz_fenster", "off"),
+  S("sensor.bad_temp", 22.3), S("sensor.bad_hum", 76), S("binary_sensor.bad_fenster", "on", {}, 7),
+  S("sensor.ku_temp", 20.8), S("sensor.ku_hum", 47),
+  S("sensor.kz_temp", 21.9), S("sensor.kz_hum", 55), S("sensor.kz_co2", 1320),
+]);
+const base = { "sensor.aussen_temperatur": [3.5, 2.5], "sensor.wz_temp": [21.4, .8], "sensor.wz_hum": [52, 4], "sensor.sz_temp": [17.6, 1.2], "sensor.sz_hum": [69, 6],
+  "sensor.bad_temp": [22.3, 1], "sensor.bad_hum": [76, 12], "sensor.ku_temp": [20.8, 1], "sensor.ku_hum": [47, 5], "sensor.kz_temp": [21.9, .7], "sensor.kz_hum": [55, 4] };
+const hass = {
+  language: "de", locale: { language: "de" }, states,
+  callApi: async (m, url) => {
+    const ids = decodeURIComponent(url.split("filter_entity_id=")[1].split("&")[0]).split(",");
+    return ids.map((id) => {
+      const [b, a] = base[id] || [20, 1]; const arr = [];
+      for (let k = 24 * 6; k >= 0; k--) {
+        const t = now - k * 10 * min, h = k / 6;
+        const v = b + a * Math.sin(h / 3.8) * Math.cos(h / 9) + (id.includes("hum") && h > 7 && h < 8.5 ? a * 1.5 : 0) + (Math.random() - .5) * a * .15;
+        arr.push({ entity_id: id, state: v.toFixed(1), last_changed: new Date(t).toISOString() });
+      }
+      return arr;
+    });
+  },
+};
+const rooms = [
+  { name: "Schlafzimmer", temperature: "sensor.sz_temp", humidity: "sensor.sz_hum", window: "binary_sensor.sz_fenster" },
+  { name: "Wohnzimmer", temperature: "sensor.wz_temp", humidity: "sensor.wz_hum", co2: "sensor.wz_co2", window: "binary_sensor.wz_fenster", climate: "climate.wohnzimmer" },
+  { name: "Bad", temperature: "sensor.bad_temp", humidity: "sensor.bad_hum", window: "binary_sensor.bad_fenster" },
+  { name: "Küche", temperature: "sensor.ku_temp", humidity: "sensor.ku_hum" },
+  { name: "Kinderzimmer", temperature: "sensor.kz_temp", humidity: "sensor.kz_hum", co2: "sensor.kz_co2" },
+];
+const mk = (host, cfg) => { const c = document.createElement("aura-climate-card"); c.setConfig(cfg); c.hass = hass; document.getElementById(host).appendChild(c); return c; };
+const q = new URLSearchParams(location.search);
+if (q.get("light")) document.body.classList.add("light");
+const c1 = mk("c1", { title: "Raumklima", outdoor_temperature: "sensor.aussen_temperatur", outdoor_humidity: "sensor.aussen_feuchte", rooms });
+c1._sel = Number(q.get("room") || 0); c1._sig = ""; c1._update();
+mk("c2", { title: "Alle Räume", layout: "grid", outdoor_temperature: "sensor.aussen_temperatur", outdoor_humidity: "sensor.aussen_feuchte", rooms });
+</script>
+</body></html>
