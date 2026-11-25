@@ -25,7 +25,7 @@
 - **Comfort chart:** all rooms as dots in a temperature/humidity diagram with comfort zone.
 - **History:** temperature & humidity of the selected room (1–168 h).
 - **Layouts:** room tabs (detail) or grid (all rooms, tap a tile for details).
-- **Visual editor** for everything incl. colors and thresholds. German & English.
+- **Fully configurable** in the visual editor: every section and tile can be hidden, thresholds per room, ventilation durations, decimals, chart range, font size, colors. German & English.
 
 ### Installation
 **HACS:** HACS → ⋮ → *Custom repositories* → `https://github.com/muhkuh666/Aura-Climate-Card`, category *Dashboard* → install *Aura Climate Card* → reload the browser.
@@ -53,23 +53,54 @@ rooms:
     climate: climate.living_room
 ```
 
+Everything below can also be set in the **visual editor** (sections: Outdoor sensors, Layout & sections, Tiles, Details & charts, Thresholds, Ventilation, Number format, Colors). Only values that differ from the default are written to YAML.
+
 | Option | Default | Description |
 |---|---|---|
-| `title` | Indoor climate | Card title (empty = none) |
+| `title` | Indoor climate | Card title |
 | `layout` | `tabs` | `tabs` or `grid` |
 | `language` | `auto` | `auto`, `de`, `en` |
+| `default_room` | `1` | Room shown first (number) |
+| `tap_action` | `more-info` | `more-info` or `none` |
 | `outdoor_temperature` / `outdoor_humidity` | – | Outdoor sensors (strongly recommended) |
-| `show_ventilation` / `show_mold` / `show_comfort_chart` / `show_history` | `true` | Show sections |
+| **Sections** | | |
+| `show_title`, `show_outdoor`, `show_summary`, `show_tabs`, `show_gauge` | `true` | Header, outdoor values, summary bar, room tabs, gauge |
+| `show_ventilation`, `show_mold`, `show_comfort_chart`, `show_history` | `true` | Main sections |
+| `font_scale` | `100` | Font size in % (60–160) |
+| `grid_min_width` | `150` | Grid layout: minimum tile width (px) |
+| **Tiles** | | |
+| `show_dewpoint`, `show_abs_humidity`, `show_wall`, `show_co2`, `show_window`, `show_target`, `show_mold_sensor` | `true` | Single tiles next to the gauge |
+| **Details & charts** | | |
+| `show_reasons`, `show_ah_compare`, `show_mold_hours` | `true` | Reasons list, indoor/outdoor g/m³ comparison, mold hours |
+| `show_history_temp`, `show_history_hum` | `true` | Lines in the history chart |
+| `show_comfort_others`, `show_outdoor_in_chart` | `true` | Other rooms / outdoor value in comfort chart |
 | `history_hours` | `24` | History period (1–168) |
+| `chart_temp_min` / `chart_temp_max` | `14` / `30` | Temperature axis of the comfort chart |
+| **Thresholds** *(can be overridden per room)* | | |
 | `temp_min` / `temp_max` | `19` / `23` | Comfort temperature (°C) |
 | `hum_min` / `hum_max` | `40` / `60` | Comfort humidity (%) |
 | `mold_warn` / `mold_alarm` | `75` / `80` | Humidity at the wall (%) |
 | `co2_warn` / `co2_alarm` | `1000` / `1500` | CO₂ (ppm) |
-| `vent_threshold` | `1.0` | Outdoor air must be this much drier (g/m³) |
 | `frsi` | `0.7` | Wall temperature factor (better insulation → higher, e.g. 0.8–0.9) |
-| `color_temperature`, `color_humidity`, `color_ok`, `color_warn`, `color_alarm` | – | Colors (hex or `[r,g,b]`) |
+| `vent_threshold` | `1.0` | Outdoor air must be this much drier (g/m³) |
+| **Ventilation** | | |
+| `vent_min_freezing` / `vent_min_cold` / `vent_min_cool` / `vent_min_mild` / `vent_min_warm` | `5` / `10` / `15` / `20` / `25` | Burst ventilation minutes for < 0 / 0–10 / 10–15 / 15–20 / > 20 °C outside |
+| `close_tolerance` | `5` | "Close window" after duration + X minutes |
+| `close_below` | `15` | Close hints only below this outdoor temperature (°C) |
+| `heating_alarm` | `true` | Alarm when heating with open window |
+| **Number format** | | |
+| `decimals_temp` / `decimals_hum` / `decimals_ah` | `1` / `0` / `1` | Decimal places |
+| **Colors** | | |
+| `color_temperature`, `color_humidity`, `color_ok`, `color_warn`, `color_alarm`, `color_info` | – | Hex or `[r,g,b]` |
 
-**Room options:** `name`, `icon`, `temperature`*, `humidity`*, `window`, `co2`, `wall_temperature`, `mold`, `climate`, `target_temperature` (* required)
+**Room options:** `name`, `icon`, `temperature`*, `humidity`*, `window`, `co2`, `wall_temperature`, `mold`, `climate`, `target_temperature` (* required) – plus **own thresholds per room**: `temp_min`, `temp_max`, `hum_min`, `hum_max`, `mold_warn`, `mold_alarm`, `co2_warn`, `co2_alarm`, `frsi`, `vent_threshold`
+
+```yaml
+  - name: Bathroom          # bathroom may be more humid
+    temperature: sensor.bath_temperature
+    humidity: sensor.bath_humidity
+    hum_max: 70
+```
 
 > Tip: if your mold warning fires too often in a well-insulated building, raise `frsi` to 0.8 – or add a real wall temperature sensor (e.g. a sensor stuck to the coldest outer-wall corner) via `wall_temperature`.
 
@@ -86,7 +117,7 @@ rooms:
 - **Behaglichkeitsdiagramm:** alle Räume als Punkte im Temperatur-/Feuchte-Diagramm mit Wohlfühlbereich.
 - **Verlauf:** Temperatur & Feuchte des gewählten Raums (1–168 h).
 - **Darstellung:** Raum-Tabs (Detail) oder Raster (alle Räume, Kachel antippen für Details).
-- **Grafischer Editor** für alles inkl. Farben und Grenzwerte. Deutsch & Englisch.
+- **Voll konfigurierbar** im grafischen Editor: jeder Bereich und jede Kachel ausblendbar, eigene Grenzwerte pro Raum (z. B. Bad darf feuchter sein), Lüftungsdauern, Nachkommastellen, Diagrammbereich, Schriftgröße, Farben. Deutsch & Englisch.
 
 ### Installation
 **HACS:** HACS → ⋮ → *Benutzerdefinierte Repositories* → `https://github.com/muhkuh666/Aura-Climate-Card`, Kategorie *Dashboard* → *Aura Climate Card* installieren → Browser neu laden.
@@ -94,7 +125,7 @@ rooms:
 **Manuell:** `dist/aura-climate-card.js` nach `config/www/` kopieren und `/local/aura-climate-card.js` als Ressource *JavaScript-Modul* hinzufügen.
 
 ### Konfiguration
-Karte über *Karte hinzufügen → Aura Climate Card* einfügen und alles im grafischen Editor einstellen – oder per YAML (Optionen siehe Tabelle oben):
+Karte über *Karte hinzufügen → Aura Climate Card* einfügen und alles im grafischen Editor einstellen – oder per YAML (alle Optionen siehe Tabelle oben; Raum-Grenzwerte wie `hum_max: 70` fürs Bad direkt beim Raum eintragen):
 
 ```yaml
 type: custom:aura-climate-card
