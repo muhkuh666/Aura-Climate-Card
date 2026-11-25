@@ -49,8 +49,8 @@ const hass = {
 const rooms = [
   { name: "Schlafzimmer", temperature: "sensor.sz_temp", humidity: "sensor.sz_hum", window: "binary_sensor.sz_fenster", volume: 32, persons: 2 },
   { name: "Wohnzimmer", temperature: "sensor.wz_temp", humidity: "sensor.wz_hum", co2: "sensor.wz_co2", voc: "sensor.wz_voc", pm25: "sensor.wz_pm25", window: "binary_sensor.wz_fenster", climate: "climate.wohnzimmer" },
-  { name: "Bad", temperature: "sensor.bad_temp", humidity: "sensor.bad_hum", window: "binary_sensor.bad_fenster", persons: 0 },
-  { name: "Küche", temperature: "sensor.ku_temp", humidity: "sensor.ku_hum", pm25: "sensor.ku_pm25", persons: 0 },
+  { name: "Bad", temperature: "sensor.bad_temp", humidity: "sensor.bad_hum", window: "binary_sensor.bad_fenster" },
+  { name: "Küche", temperature: "sensor.ku_temp", humidity: "sensor.ku_hum", pm25: "sensor.ku_pm25" },
   { name: "Kinderzimmer", temperature: "sensor.kz_temp", humidity: "sensor.kz_hum", co2: "sensor.kz_co2" },
 ];
 const mk = (host, cfg) => { const c = document.createElement("aura-climate-card"); c.setConfig(cfg); c.hass = hass; document.getElementById(host).appendChild(c); return c; };

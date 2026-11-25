@@ -2,7 +2,7 @@
  * Aura Climate Card – Raumklima, Schimmelrisiko & Lüftungsempfehlung für Home Assistant
  * MIT © muhkuh666 – https://github.com/muhkuh666/Aura-Climate-Card
  */
-const AURA_VERSION = "1.2.0";
+const AURA_VERSION = "1.2.1";
 
 /* ------------------------------------------------------------------ */
 /*  Texte                                                              */
@@ -177,6 +177,7 @@ const AURA_DEFAULTS = {
   show_outdoor: true,
   show_summary: true,
   show_tabs: true,
+  tabs_mode: "wrap",
   show_gauge: true,
   show_ventilation: true,
   show_mold: true,
@@ -468,7 +469,9 @@ class AuraClimateCard extends HTMLElement {
   _estimateCo2(room, c) {
     const V = Number(room.volume ?? c.default_volume);
     if (!(V > 0)) return null;
-    const baseP = Number(room.persons ?? c.default_persons);
+    // Ohne Anwesenheitssensor wird nur geschätzt, wenn beim Raum Personen eingetragen sind
+    const hasPresence = !!this._st(room.presence);
+    const baseP = Number(room.persons ?? (hasPresence ? c.default_persons : 0));
     const cOut = Number(c.co2_outdoor) || 420;
     const nClosed = Math.max(0.05, Number(room.ach ?? c.ach_closed) || 0.3);
     const nOpen = Math.max(nClosed, Number(c.ach_open) || 6);
@@ -823,6 +826,8 @@ class AuraClimateCard extends HTMLElement {
 
     const title = c.show_title ? c.title ?? this._t("title") : "";
     const outHtml = c.show_outdoor ? this._renderOutdoor(out) : "";
+    const oldTabs = this.shadowRoot.querySelector(".tabswrap.scroll .tabs");
+    if (oldTabs) this._tabScroll = oldTabs.scrollLeft;
     this.shadowRoot.innerHTML = `
       <style>${this._css(col)}</style>
       <ha-card>
@@ -831,6 +836,46 @@ class AuraClimateCard extends HTMLElement {
         ${body}
       </ha-card>`;
     this._bind();
+    this._setupTabs();
+  }
+
+  _setupTabs() {
+    const wrap = this.shadowRoot.querySelector(".tabswrap.scroll");
+    if (!wrap) return;
+    const tabs = wrap.querySelector(".tabs");
+    const upd = () => {
+      const max = tabs.scrollWidth - tabs.clientWidth;
+      wrap.classList.toggle("can-l", tabs.scrollLeft > 2);
+      wrap.classList.toggle("can-r", tabs.scrollLeft < max - 2);
+    };
+    if (this._tabScroll != null) tabs.scrollLeft = this._tabScroll;
+    if (this._scrollToSel) {
+      this._scrollToSel = false;
+      const sel = tabs.querySelector(".tab.sel");
+      if (sel) {
+        const l = sel.offsetLeft - tabs.offsetLeft;
+        if (l < tabs.scrollLeft) tabs.scrollLeft = l - 30;
+        else if (l + sel.offsetWidth > tabs.scrollLeft + tabs.clientWidth) tabs.scrollLeft = l + sel.offsetWidth - tabs.clientWidth + 30;
+      }
+    }
+    tabs.addEventListener("scroll", () => { this._tabScroll = tabs.scrollLeft; upd(); }, { passive: true });
+    tabs.addEventListener("wheel", (ev) => {
+      if (Math.abs(ev.deltaY) > Math.abs(ev.deltaX) && tabs.scrollWidth > tabs.clientWidth) {
+        ev.preventDefault();
+        tabs.scrollLeft += ev.deltaY;
+      }
+    }, { passive: false });
+    wrap.querySelectorAll("[data-tscroll]").forEach((b) =>
+      b.addEventListener("click", () => tabs.scrollBy({ left: Number(b.dataset.tscroll) * tabs.clientWidth * 0.7, behavior: "smooth" }))
+    );
+    requestAnimationFrame(upd);
+    if (!this._ro && window.ResizeObserver) {
+      this._ro = new ResizeObserver(() => {
+        const t = this.shadowRoot.querySelector(".tabswrap.scroll .tabs");
+        if (t) t.dispatchEvent(new Event("scroll"));
+      });
+      this._ro.observe(this);
+    }
   }
 
   _renderOutdoor(out) {
@@ -858,11 +903,14 @@ class AuraClimateCard extends HTMLElement {
   _renderTabs(all, idx) {
     const c = this._config;
     if (c.layout === "grid") {
-      return `<div class="tabs"><button class="tab back" data-back="1">${icon("back")}${this._t("back")}</button>
-        <span class="tab sel"><i class="dot lv-${all[idx].level}"></i>${esc(all[idx].room.name || "–")}</span></div>`;
+      return `<div class="tabswrap wrap"><div class="tabs"><button class="tab back" data-back="1">${icon("back")}${this._t("back")}</button>
+        <span class="tab sel"><i class="dot lv-${all[idx].level}"></i>${esc(all[idx].room.name || "–")}</span></div></div>`;
     }
     if (all.length < 2 || !c.show_tabs) return "";
-    return `<div class="tabs">${all
+    const scroll = c.tabs_mode === "scroll";
+    return `<div class="tabswrap ${scroll ? "scroll" : "wrap"}">
+      ${scroll ? `<button class="tarr l" data-tscroll="-1" aria-label="‹">${icon("back")}</button>` : ""}
+      <div class="tabs">${all
       .map(
         (a, i) => `<button class="tab ${i === idx ? "sel" : ""}" data-room="${i}">
           ${a.room.icon ? `<ha-icon icon="${esc(a.room.icon)}"></ha-icon>` : `<i class="dot lv-${a.level}"></i>`}
@@ -870,7 +918,9 @@ class AuraClimateCard extends HTMLElement {
           ${a.room.icon && a.level !== "ok" ? `<i class="dot lv-${a.level}"></i>` : ""}
         </button>`
       )
-      .join("")}</div>`;
+      .join("")}</div>
+      ${scroll ? `<button class="tarr r" data-tscroll="1" aria-label="›">${icon("back")}</button>` : ""}
+    </div>`;
   }
 
   _renderGrid(all) {
@@ -1167,6 +1217,7 @@ hy = [10, 90];
     root.querySelectorAll("[data-room]").forEach((b) =>
       b.addEventListener("click", () => {
         this._sel = Number(b.dataset.room);
+        this._scrollToSel = true;
         this._sig = "";
         this._update();
       })
@@ -1210,7 +1261,17 @@ hy = [10, 90];
       background:color-mix(in srgb,var(--c) 14%,transparent);color:color-mix(in srgb,var(--c) 70%,var(--primary-text-color))}
     .lv-ok{--c:var(--ok)}.lv-info{--c:var(--info)}.lv-warn{--c:var(--warn)}.lv-alarm{--c:var(--alarm)}
     .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--c);flex:none}
-    .tabs{display:flex;gap:6px;margin-top:12px;overflow-x:auto;scrollbar-width:none}
+    .tabswrap{position:relative;margin-top:12px}
+    .tabs{display:flex;gap:6px}
+    .wrap .tabs{flex-wrap:wrap}
+    .scroll .tabs{overflow-x:auto;scrollbar-width:none;scroll-behavior:auto}
+    .scroll .tabs::-webkit-scrollbar{display:none}
+    .tarr{position:absolute;top:0;bottom:0;width:34px;display:none;align-items:center;justify-content:center;z-index:1;color:var(--primary-text-color)}
+    .tarr .ic{width:18px;height:18px;background:var(--card-bg);border-radius:50%;padding:4px;box-shadow:0 1px 4px rgba(0,0,0,.25)}
+    .tarr.l{left:-4px;background:linear-gradient(90deg,var(--card-bg) 45%,transparent)}
+    .tarr.r{right:-4px;background:linear-gradient(270deg,var(--card-bg) 45%,transparent)}
+    .tarr.r .ic{transform:rotate(180deg)}
+    .can-l .tarr.l,.can-r .tarr.r{display:flex}
     .tab{display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;background:var(--soft);white-space:nowrap;font-size:.9em}
     .tab.sel{background:color-mix(in srgb,var(--hum) 22%,transparent);font-weight:600}
     .tab ha-icon{--mdc-icon-size:18px}
@@ -1298,7 +1359,7 @@ const ED_I18N = {
     co2_estimate: "CO₂ schätzen, wenn kein Sensor",
     co2_estimate_vent: "Schätzung löst Lüftungsempfehlung aus",
     default_volume: "Raumvolumen Standard (m³)",
-    default_persons: "Personen Standard",
+    default_persons: "Personen bei Anwesenheit (Standard)",
     ach_closed: "Luftwechsel Fenster zu (1/h)",
     ach_open: "Luftwechsel Fenster offen (1/h)",
     co2_outdoor: "CO₂ außen (ppm)",
@@ -1324,6 +1385,9 @@ const ED_I18N = {
     show_outdoor: "Außenwerte oben",
     show_summary: "Zusammenfassung",
     show_tabs: "Raum-Tabs",
+    tabs_mode: "Raum-Tabs bei vielen Räumen",
+    tm_wrap: "Umbrechen (mehrzeilig)",
+    tm_scroll: "Scrollen mit Pfeilen",
     show_gauge: "Rundanzeige",
     show_dewpoint: "Taupunkt",
     show_abs_humidity: "Absolute Feuchte",
@@ -1414,7 +1478,7 @@ const ED_I18N = {
     co2_estimate: "Estimate CO₂ if no sensor",
     co2_estimate_vent: "Estimate triggers ventilation advice",
     default_volume: "Default room volume (m³)",
-    default_persons: "Default persons",
+    default_persons: "Persons when present (default)",
     ach_closed: "Air change window closed (1/h)",
     ach_open: "Air change window open (1/h)",
     co2_outdoor: "Outdoor CO₂ (ppm)",
@@ -1440,6 +1504,9 @@ const ED_I18N = {
     show_outdoor: "Outdoor values in header",
     show_summary: "Summary",
     show_tabs: "Room tabs",
+    tabs_mode: "Room tabs with many rooms",
+    tm_wrap: "Wrap (multiple lines)",
+    tm_scroll: "Scroll with arrows",
     show_gauge: "Gauge",
     show_dewpoint: "Dew point",
     show_abs_humidity: "Absolute humidity",
@@ -1596,6 +1663,7 @@ class AuraClimateCardEditor extends HTMLElement {
       ]),
       sec("g_layout", l.g_layout, "mdi:view-dashboard-outline", [
         bools(["show_title", "show_outdoor", "show_summary", "show_tabs", "show_gauge", "show_ventilation", "show_mold", "show_comfort_chart", "show_history"]),
+        { name: "tabs_mode", selector: { select: { mode: "dropdown", options: [{ value: "wrap", label: l.tm_wrap }, { value: "scroll", label: l.tm_scroll }] } } },
         { type: "grid", name: "", schema: [num("font_scale", 60, 160, 5), num("grid_min_width", 100, 400, 10)] },
       ]),
       sec("g_tiles", l.g_tiles, "mdi:view-grid-outline", [
