@@ -27,19 +27,35 @@ const states = Object.fromEntries([
   S("sensor.bad_temp", 22.3), S("sensor.bad_hum", 76), S("binary_sensor.bad_fenster", "on", {}, 7),
   S("sensor.ku_temp", 20.8), S("sensor.ku_hum", 47), S("sensor.ku_pm25", 38, { unit_of_measurement: "µg/m³" }),
   S("sensor.wz_voc", 115, { unit_of_measurement: "" }), S("sensor.wz_pm25", 7, { unit_of_measurement: "µg/m³" }),
+  S("weather.home", "cloudy", {}), S("switch.entfeuchter_sz", "off", {}),
+  S("sensor.keller_temp", 13.5), S("sensor.keller_hum", 74), S("binary_sensor.keller_fenster", "off", {}, 600),
   S("sensor.kz_temp", 21.9), S("sensor.kz_hum", 55), S("sensor.kz_co2", 1320),
 ]);
 const base = { "sensor.aussen_temperatur": [3.5, 2.5], "sensor.wz_temp": [21.4, .8], "sensor.wz_hum": [52, 4], "sensor.sz_temp": [17.6, 1.2], "sensor.sz_hum": [69, 6],
-  "sensor.bad_temp": [22.3, 1], "sensor.bad_hum": [76, 12], "sensor.ku_temp": [20.8, 1], "sensor.ku_hum": [47, 5], "sensor.kz_temp": [21.9, .7], "sensor.kz_hum": [55, 4] };
+  "sensor.bad_temp": [22.3, 1], "sensor.bad_hum": [76, 12], "sensor.ku_temp": [20.8, 1], "sensor.ku_hum": [47, 5], "sensor.kz_temp": [21.9, .7], "sensor.keller_temp": [13.5, .3], "sensor.keller_hum": [74, 2], "sensor.wz_co2": [700, 150], "sensor.kz_hum": [55, 4] };
+const fc = []; for (let i = 0; i < 24; i++) { const t = new Date(now + i * 3600e3); t.setMinutes(0, 0, 0); const hr = t.getHours();
+  fc.push({ datetime: t.toISOString(), temperature: 2 + 4 * Math.sin((hr - 9) / 24 * 2 * Math.PI), humidity: 92 - 22 * Math.sin((hr - 9) / 24 * 2 * Math.PI), precipitation_probability: hr === 11 ? 80 : 10 }); }
 const hass = {
+  connection: { subscribeMessage: async (cb, msg) => { setTimeout(() => cb({ forecast: fc }), 50); return () => {}; } },
+  callService: async (d, sv, data) => { console.log("SERVICE " + d + "." + sv + " " + JSON.stringify(data)); },
   language: "de", locale: { language: "de" }, states,
   callApi: async (m, url) => {
     const ids = decodeURIComponent(url.split("filter_entity_id=")[1].split("&")[0]).split(",");
+    const startTs = new Date(decodeURIComponent(url.split("history/period/")[1].split("?")[0])).getTime();
+    const steps = Math.round((now - startTs) / (10 * min));
     return ids.map((id) => {
+      if (id.startsWith("binary_sensor.")) {
+        const arr = [{ entity_id: id, state: "off", last_changed: new Date(startTs).toISOString() }];
+        const cur = hass.states[id];
+        [[9 * 60, 12], [5 * 60, 8], [2 * 60, 15]].forEach(([ago, dur]) => { arr.push({ state: "on", last_changed: new Date(now - ago * min).toISOString() }); arr.push({ state: "off", last_changed: new Date(now - (ago - dur) * min).toISOString() }); });
+        if (cur && cur.state === "on") arr.push({ state: "on", last_changed: cur.last_changed });
+        return arr;
+      }
       const [b, a] = base[id] || [20, 1]; const arr = [];
-      for (let k = 24 * 6; k >= 0; k--) {
+      for (let k = steps; k >= 0; k--) {
         const t = now - k * 10 * min, h = k / 6;
-        const v = b + a * Math.sin(h / 3.8) * Math.cos(h / 9) + (id.includes("hum") && h > 7 && h < 8.5 ? a * 1.5 : 0) + (Math.random() - .5) * a * .15;
+        let v = b + a * Math.sin(h / 3.8) * Math.cos(h / 9) + (id.includes("hum") && h > 7 && h < 8.5 ? a * 1.5 : 0) + (Math.random() - .5) * a * .15;
+        if (id === "sensor.bad_hum" && h < 0.5) v = 76; if (id === "sensor.bad_hum" && h >= 0.5 && h < 1) v = 64;
         arr.push({ entity_id: id, state: v.toFixed(1), last_changed: new Date(t).toISOString() });
       }
       return arr;
@@ -47,16 +63,17 @@ const hass = {
   },
 };
 const rooms = [
-  { name: "Schlafzimmer", temperature: "sensor.sz_temp", humidity: "sensor.sz_hum", window: "binary_sensor.sz_fenster", volume: 32, persons: 2 },
+  { name: "Schlafzimmer", temperature: "sensor.sz_temp", humidity: "sensor.sz_hum", window: "binary_sensor.sz_fenster", volume: 32, persons: 2, dehumidifier: "switch.entfeuchter_sz" },
   { name: "Wohnzimmer", temperature: "sensor.wz_temp", humidity: "sensor.wz_hum", co2: "sensor.wz_co2", voc: "sensor.wz_voc", pm25: "sensor.wz_pm25", window: "binary_sensor.wz_fenster", climate: "climate.wohnzimmer" },
   { name: "Bad", temperature: "sensor.bad_temp", humidity: "sensor.bad_hum", window: "binary_sensor.bad_fenster" },
   { name: "Küche", temperature: "sensor.ku_temp", humidity: "sensor.ku_hum", pm25: "sensor.ku_pm25" },
+  { name: "Keller", temperature: "sensor.keller_temp", humidity: "sensor.keller_hum", window: "binary_sensor.keller_fenster", room_type: "cellar" },
   { name: "Kinderzimmer", temperature: "sensor.kz_temp", humidity: "sensor.kz_hum", co2: "sensor.kz_co2" },
 ];
 const mk = (host, cfg) => { const c = document.createElement("aura-climate-card"); c.setConfig(cfg); c.hass = hass; document.getElementById(host).appendChild(c); return c; };
 const q = new URLSearchParams(location.search);
 if (q.get("light")) document.body.classList.add("light");
-const c1 = mk("c1", { title: "Raumklima", outdoor_temperature: "sensor.aussen_temperatur", outdoor_humidity: "sensor.aussen_feuchte", rooms });
+const c1 = mk("c1", { title: "Raumklima", weather: "weather.home", outdoor_temperature: "sensor.aussen_temperatur", outdoor_humidity: "sensor.aussen_feuchte", rooms });
 c1._sel = Number(q.get("room") || 0); c1._sig = ""; c1._update();
 mk("c2", { title: "Alle Räume", layout: "grid", outdoor_temperature: "sensor.aussen_temperatur", outdoor_humidity: "sensor.aussen_feuchte", rooms });
 </script>

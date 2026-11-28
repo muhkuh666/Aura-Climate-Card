@@ -25,6 +25,14 @@
 - **Air quality score (0–100)** per room from CO₂, VOC, PM2.5 and PM10 – the worst value counts and is named ("particulates PM2.5").
 - **CO₂ estimate without a sensor:** calculated from room volume, persons (fixed or via presence sensor), window state and air change rate (mass balance). Clearly marked as *estimated*. A room is only estimated if it has a presence sensor or a number of `persons` – without a presence sensor those persons are assumed to be present all the time.
 - **Several thermostats per room:** the target tile shows the range (e.g. 21.5–22.0 °C) and how many are heating; tap it for the list of all thermostats.
+- **Best time to ventilate today** from your weather forecast (hourly): driest outdoor air in the heating season, coolest hours in summer – plus "better ventilate at 14–16" when ventilating now won't help.
+- **Ventilation countdown:** automatic while a window sensor reports "open", manual start/stop button for rooms without window sensor; "time is up – close the window".
+- **Heat loss of open windows** in kWh and € (today and current opening).
+- **Cellar mode (dew point ventilation):** ventilate only when the outdoor air dries the cellar and won't condense on cold walls.
+- **Trend arrows** for temperature, humidity and CO₂ (last 30 min) – rapidly rising humidity (shower, cooking) triggers ventilation advice.
+- **Weekly mold balance:** mold hours of every room over the last 7 days, worst room first.
+- **Dehumidifier / humidifier** per room with recommendation and on/off button right in the card.
+- **Notification blueprint** for your phone (see below).
 - **Window timer:** "open for 14 min – close the window", plus an alarm when the heating runs with the window open.
 - **Comfort chart:** all rooms as dots in a temperature/humidity diagram with comfort zone.
 - **History:** temperature & humidity of the selected room (1–168 h).
@@ -106,12 +114,17 @@ Everything below can also be set in the **visual editor** (sections: Outdoor sen
 | `ach_closed` / `ach_open` | `0.3` / `6` | Air changes per hour, window closed / open (older houses ~0.5, airtight new builds ~0.1–0.2) |
 | `co2_outdoor` | `420` | Outdoor CO₂ (ppm) |
 | `aq_warn` / `aq_alarm` | `60` / `40` | Score thresholds *(per room too)* |
+| **Forecast & extras** | | |
+| `weather` | – | Weather entity with hourly forecast (for the best time to ventilate) |
+| `show_forecast`, `show_trends`, `show_mold_week`, `show_devices` | `true` | Best time, trend arrows, weekly mold balance, de-/humidifier tiles |
+| `show_vent_timer` | `true` | Start/stop countdown for rooms without window sensor |
+| `show_heat_loss` / `heat_price` / `currency` | `true` / `0.12` / `€` | Heat loss of open windows |
 | **Number format** | | |
 | `decimals_temp` / `decimals_hum` / `decimals_ah` | `1` / `0` / `1` | Decimal places |
 | **Colors** | | |
 | `color_temperature`, `color_humidity`, `color_ok`, `color_warn`, `color_alarm`, `color_info` | – | Hex or `[r,g,b]` |
 
-**Room options:** `name`, `icon`, `temperature`*, `humidity`*, `window`, `co2`, `wall_temperature`, `wall_learn`, `mold`, `climate` (one or a list of thermostats), `target_temperature` (* required) – plus **own thresholds per room**: `temp_min`, `temp_max`, `hum_min`, `hum_max`, `mold_warn`, `mold_alarm`, `co2_warn`, `co2_alarm`, `frsi`, `vent_threshold`, `aq_warn`, `aq_alarm` – plus **air quality**: `voc`, `pm25`, `pm10`, `presence` (binary_sensor = present/absent, sensor/input_number = number of persons), `volume` (m³), `persons`, `ach`
+**Room options:** `name`, `icon`, `temperature`*, `humidity`*, `window`, `co2`, `wall_temperature`, `wall_learn`, `mold`, `climate` (one or a list of thermostats), `target_temperature`, `room_type` (`normal` / `cellar`), `dehumidifier`, `humidifier` (* required) – plus **own thresholds per room**: `temp_min`, `temp_max`, `hum_min`, `hum_max`, `mold_warn`, `mold_alarm`, `co2_warn`, `co2_alarm`, `frsi`, `vent_threshold`, `aq_warn`, `aq_alarm` – plus **air quality**: `voc`, `pm25`, `pm10`, `presence` (binary_sensor = present/absent, sensor/input_number = number of persons), `volume` (m³), `persons`, `ach`
 
 ```yaml
   - name: Bathroom          # bathroom may be more humid
@@ -126,6 +139,12 @@ Everything below can also be set in the **visual editor** (sections: Outdoor sen
     volume: 32
     persons: 2
 ```
+
+### Notifications / Benachrichtigungen
+
+[![Open your Home Assistant instance and show the blueprint import dialog.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fmuhkuh666%2FAura-Climate-Card%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Faura_climate_notify.yaml)
+
+One automation per room / eine Automation pro Raum: **ventilate** (humidity too high and outdoor air drier – otherwise "ventilating won't help"), **mold alarm** (calculated humidity at the coldest wall spot for 30 min), **window open too long** and **heating with open window**. Each message type can be switched off; minimum interval between messages is configurable.
 
 ### Self-learning wall spots / Selbstlernende Wandpunkte
 
@@ -151,6 +170,14 @@ The tile then shows *learned · n measurements* and the mold risk uses your real
 - **Luftqualitäts-Score (0–100)** pro Raum aus CO₂, VOC, PM2.5 und PM10 – der schlechteste Wert zählt und wird genannt („Feinstaub PM2.5“).
 - **CO₂-Schätzung ohne Sensor:** berechnet aus Raumvolumen, Personen (fest oder per Anwesenheitssensor), Fensterzustand und Luftwechsel (Massenbilanz). Deutlich als *geschätzt* markiert. Geschätzt wird nur, wenn der Raum einen Anwesenheitssensor oder eine Personenzahl hat – ohne Anwesenheitssensor gelten diese Personen als dauerhaft anwesend.
 - **Mehrere Thermostate pro Raum:** Die Soll-Kachel zeigt den Bereich (z. B. 21,5–22,0 °C) und wie viele gerade heizen; Tipp darauf zeigt alle Thermostate einzeln.
+- **Beste Lüftungszeit heute** aus deiner Wettervorhersage (stündlich): trockenste Außenluft in der Heizperiode, kühlste Stunden im Sommer – plus „besser 14–16 Uhr lüften“, wenn Lüften jetzt nichts bringt.
+- **Lüft-Countdown:** automatisch, solange der Fenstersensor „offen“ meldet; Start/Stopp-Knopf für Räume ohne Fenstersensor; „Lüftzeit vorbei – Fenster schließen“.
+- **Heizverlust offener Fenster** in kWh und € (heute und aktuelle Öffnung).
+- **Kellermodus (Taupunktlüftung):** nur lüften, wenn die Außenluft den Keller trocknet und an kalten Wänden nicht kondensiert.
+- **Trendpfeile** für Temperatur, Luftfeuchte und CO₂ (letzte 30 min) – schnell steigende Feuchte (Duschen, Kochen) löst die Lüftungsempfehlung aus.
+- **Schimmel-Wochenbilanz:** Schimmelstunden aller Räume der letzten 7 Tage, schlechtester Raum oben.
+- **Ent-/Befeuchter** pro Raum mit Empfehlung und An/Aus-Knopf direkt in der Karte.
+- **Benachrichtigungs-Blueprint** fürs Handy (siehe unten).
 - **Fenster-Timer:** „seit 14 min offen – Fenster schließen“ und Alarm, wenn bei offenem Fenster geheizt wird.
 - **Behaglichkeitsdiagramm:** alle Räume als Punkte im Temperatur-/Feuchte-Diagramm mit Wohlfühlbereich.
 - **Verlauf:** Temperatur & Feuchte des gewählten Raums (1–168 h).

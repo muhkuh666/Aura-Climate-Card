@@ -2,7 +2,7 @@
  * Aura Climate Card – Raumklima, Schimmelrisiko & Lüftungsempfehlung für Home Assistant
  * MIT © muhkuh666 – https://github.com/muhkuh666/Aura-Climate-Card
  */
-const AURA_VERSION = "1.5.0";
+const AURA_VERSION = "2.0.0";
 
 /* ------------------------------------------------------------------ */
 /*  Texte                                                              */
@@ -66,6 +66,34 @@ const AURA_I18N = {
     wall_learned: "gelernt · {n} Messung|gelernt · {n} Messungen",
     wl_title: "Wandpunkt messen",
     th_title: "Thermostate",
+    fc_best: "Beste Lüftungszeit heute: {f}–{t} Uhr · {ah} g/m³ (jetzt {n})",
+    fc_now: "Jetzt ist die beste Lüftungszeit für heute ({ah} g/m³)",
+    fc_cool: "Kühl lüften: {f}–{t} Uhr · {tmp} °C",
+    fc_later: "Besser {f}–{t} Uhr lüften (Außenluft ≈ {ah} g/m³)",
+    tr_rising: "Feuchte steigt schnell (+{d} % in 30 min)",
+    vt_start: "Lüften gestartet",
+    vt_stop: "Fenster zu",
+    vt_left: "Lüft-Timer: noch {m} min",
+    vt_done: "Lüftzeit vorbei – Fenster schließen",
+    hl_now: "Heizverlust bisher ≈ {k} kWh ({c})",
+    hl_today: "heute ≈ {k} kWh · {c}",
+    hl_open: "≈ {k} kWh bisher",
+    v_cellar_closed: "Fenster zu lassen",
+    r_cellar_dry: "Kellerlüftung: Außenluft trocknet (Taupunkt außen {d} °C)",
+    r_cellar_wet: "Taupunkt außen {d} °C über Wand {w} °C – Feuchte würde sich niederschlagen",
+    r_cellar_wait: "Erst lüften, wenn der Taupunkt außen unter {w} °C fällt",
+    dev_dehum: "Entfeuchter",
+    dev_hum: "Befeuchter",
+    dev_on: "an",
+    dev_off: "aus",
+    dev_target: "Ziel {v} %",
+    adv_dehum_on: "Entfeuchter einschalten",
+    adv_dehum_off: "Entfeuchter ausschalten",
+    adv_hum_on: "Befeuchter einschalten",
+    adv_hum_off: "Befeuchter ausschalten",
+    mw_title: "Schimmel-Wochenbilanz",
+    mw_hours: "{h} h",
+    mw_sub: "Stunden über {v} % an der Wand, letzte 7 Tage",
     th_count: "{n} Thermostate",
     th_heating: "{n} heizt|{n} heizen",
     th_off: "aus",
@@ -169,6 +197,34 @@ const AURA_I18N = {
     wall_learned: "learned · {n} measurement|learned · {n} measurements",
     wl_title: "Measure wall spot",
     th_title: "Thermostats",
+    fc_best: "Best time to ventilate today: {f}–{t} · {ah} g/m³ (now {n})",
+    fc_now: "Now is the best time to ventilate today ({ah} g/m³)",
+    fc_cool: "Ventilate to cool: {f}–{t} · {tmp} °C",
+    fc_later: "Better ventilate {f}–{t} (outdoor ≈ {ah} g/m³)",
+    tr_rising: "Humidity rising fast (+{d} % in 30 min)",
+    vt_start: "Ventilation started",
+    vt_stop: "Window closed",
+    vt_left: "Ventilation timer: {m} min left",
+    vt_done: "Time is up – close the window",
+    hl_now: "Heat loss so far ≈ {k} kWh ({c})",
+    hl_today: "today ≈ {k} kWh · {c}",
+    hl_open: "≈ {k} kWh so far",
+    v_cellar_closed: "Keep windows closed",
+    r_cellar_dry: "Cellar ventilation: outdoor air dries (outdoor dew point {d} °C)",
+    r_cellar_wet: "Outdoor dew point {d} °C above wall {w} °C – moisture would condense",
+    r_cellar_wait: "Ventilate once the outdoor dew point drops below {w} °C",
+    dev_dehum: "Dehumidifier",
+    dev_hum: "Humidifier",
+    dev_on: "on",
+    dev_off: "off",
+    dev_target: "target {v} %",
+    adv_dehum_on: "Turn dehumidifier on",
+    adv_dehum_off: "Turn dehumidifier off",
+    adv_hum_on: "Turn humidifier on",
+    adv_hum_off: "Turn humidifier off",
+    mw_title: "Mold balance (week)",
+    mw_hours: "{h} h",
+    mw_sub: "Hours above {v} % at the wall, last 7 days",
     th_count: "{n} thermostats",
     th_heating: "{n} heating|{n} heating",
     th_off: "off",
@@ -240,6 +296,7 @@ const AURA_DEFAULTS = {
   show_window: true,
   show_target: true,
   show_mold_sensor: true,
+  show_devices: true,
   show_air_quality: true,
   show_voc: true,
   show_pm: true,
@@ -266,6 +323,13 @@ const AURA_DEFAULTS = {
   close_tolerance: 5,
   close_below: 15,
   heating_alarm: true,
+  show_forecast: true,
+  show_trends: true,
+  show_heat_loss: true,
+  heat_price: 0.12,
+  currency: "€",
+  show_mold_week: true,
+  show_vent_timer: true,
   co2_estimate: true,
   co2_estimate_vent: true,
   co2_outdoor: 420,
@@ -387,6 +451,12 @@ const ICONS = {
   flame: '<path d="M12 3c1 3.5 5 5.5 5 10a5 5 0 0 1-10 0c0-2.5 1.3-4 2.5-5 .3 1.8 1.2 2.8 2.2 3.2C11 8.5 11 6 12 3z"/>',
   home: '<path d="M4 11 12 4l8 7v9H4z"/><path d="M10 20v-5h4v5"/>',
   back: '<path d="M15 5l-7 7 7 7"/>',
+  clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  play: '<path d="M8 5.5v13l10-6.5z"/>',
+  stop: '<rect x="7" y="7" width="10" height="10" rx="1.5"/>',
+  euro: '<path d="M17 7.5a6 6 0 1 0 0 9"/><path d="M5 10.5h8M5 13.5h8"/>',
+  dehum: '<path d="M12 3.5c3 3.8 5.5 7 5.5 10a5.5 5.5 0 0 1-11 0c0-3 2.5-6.2 5.5-10z"/><path d="M4 4l16 16"/>',
+  cellar: '<path d="M3 10 12 4l9 6"/><path d="M5 10v10h14V10"/><path d="M9 20v-6h6v6"/>',
   leaf: '<path d="M5 19c0-8 5-13 14-14-1 9-6 14-14 14z"/><path d="M5 19 13 11"/>',
   dust: '<circle cx="6" cy="8" r="1.4"/><circle cx="12" cy="6" r="1.1"/><circle cx="17" cy="9" r="1.6"/><circle cx="8" cy="14" r="1.2"/><circle cx="14" cy="13" r="1.4"/><circle cx="11" cy="19" r="1.1"/><circle cx="18" cy="17" r="1.2"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8"/>',
@@ -443,6 +513,9 @@ class AuraClimateCard extends HTMLElement {
     this._sig = "";
     this._hist = null;
     this._histAt = 0;
+    this._week = null;
+    this._weekAt = 0;
+    if (this._fcEntity !== this._config.weather) this._unsubForecast();
     if (this._hass) this._update();
   }
 
@@ -452,14 +525,21 @@ class AuraClimateCard extends HTMLElement {
   }
 
   connectedCallback() {
+    this._tick = 0;
     this._timer = setInterval(() => {
-      this._sig = "";
-      this._update();
-    }, 60000);
+      this._tick++;
+      // jede Minute neu zeichnen, bei laufendem Timer / offenem Fenster alle 15 s
+      const busy = (this._all || []).some((a) => a.windowOpen || a.timer);
+      if (busy || this._tick % 4 === 0) {
+        this._sig = "";
+        this._update();
+      }
+    }, 15000);
     if (this._hass) this._update();
   }
   disconnectedCallback() {
     clearInterval(this._timer);
+    this._unsubForecast();
   }
 
   getCardSize() {
@@ -800,7 +880,20 @@ class AuraClimateCard extends HTMLElement {
     if (rh < c.hum_min) a.comfort.push("c_dry");
     if (rh > c.hum_max) a.comfort.push("c_humid");
 
+    a.trT = this._trend(room.temperature, t, "t");
+    a.trH = this._trend(room.humidity, rh, "h");
+    a.trC = room.co2 ? this._trend(room.co2, a.co2, "c") : null;
+    a.cellar = room.room_type === "cellar";
+    const dev = (id) => {
+      const st = this._st(id);
+      if (!st) return null;
+      return { id, on: ["on", "true", "home"].includes(String(st.state).toLowerCase()), target: st.attributes?.humidity ?? null };
+    };
+    a.dehum = dev(room.dehumidifier);
+    a.hum = dev(room.humidifier);
+
     this._ventilation(a, out);
+    this._afterVentilation(a, out);
 
     const moldLvl = a.mold === "high" ? "alarm" : a.mold === "medium" ? "warn" : "ok";
     a.level = LEVEL[moldLvl] > LEVEL[a.vLevel] ? moldLvl : a.vLevel;
@@ -812,7 +905,7 @@ class AuraClimateCard extends HTMLElement {
     const c = a.cfg;
     const R = a.reasons;
     const needs = [];
-    if (a.rh > c.hum_max) needs.push("humid");
+    if (a.rh > c.hum_max || (a.trH?.strong && a.trH.dir > 0 && a.rh > c.hum_max - 8)) needs.push("humid");
     if (a.mold !== "low") needs.push("mold");
     if (a.co2 != null && a.co2 >= c.co2_warn && (!a.co2Est || c.co2_estimate_vent)) needs.push("co2");
     if (a.aq != null && a.aqWorst !== "co2" && a.aqLevel !== "ok" && !needs.includes("co2")) needs.push("co2");
@@ -829,6 +922,47 @@ class AuraClimateCard extends HTMLElement {
 
     let key = "v_ok",
       lvl = "ok";
+
+    if (a.cellar && out.ok) {
+      // Taupunktlüftung: nur lüften, wenn die Außenluft trocknet und an kalten Flächen nicht kondensiert
+      const outDew = Phys.dew(out.t, out.rh);
+      const cold = Math.min(a.wall ?? a.t, a.t);
+      const safe = outDew < cold - 1 && a.drier;
+      const dTxt = { d: this._n(outDew, 1), w: this._n(cold, 1) };
+      if (a.windowOpen) {
+        R.push(this._t("r_open", { m: a.openMin }));
+        if (!safe) {
+          key = "v_close";
+          lvl = "warn";
+          R.push(this._t("r_cellar_wet", dTxt));
+        } else {
+          key = "v_open";
+          lvl = "info";
+          R.push(this._t("r_cellar_dry", dTxt));
+        }
+      } else if (needs.includes("humid") || needs.includes("mold")) {
+        if (needs.includes("humid")) R.push(this._t("r_humid", { v: c.hum_max }));
+        if (needs.includes("mold")) R.push(this._t("r_mold"));
+        if (safe) {
+          key = "v_now";
+          lvl = a.mold === "high" ? "alarm" : "warn";
+          R.push(this._t("r_cellar_dry", dTxt));
+        } else {
+          key = "v_cellar_closed";
+          lvl = a.mold === "high" ? "alarm" : "info";
+          R.push(outDew >= cold - 1 ? this._t("r_cellar_wet", dTxt) : this._t("r_wetter", ahTxt()));
+          R.push(this._t("r_cellar_wait", dTxt));
+        }
+      } else if (needs.includes("co2")) {
+        key = "v_now";
+        lvl = "warn";
+        R.push(this._t("r_co2", { v: c.co2_warn }));
+      }
+      a.vKey = key;
+      a.vLevel = lvl;
+      a.showDuration = key === "v_now";
+      return;
+    }
 
     if (a.windowOpen) {
       R.push(this._t("r_open", { m: a.openMin }));
@@ -850,7 +984,7 @@ class AuraClimateCard extends HTMLElement {
         if (left > 0 && out.hasT && out.t < c.close_below) R.push(this._t("dur_left", { m: left }));
       }
     } else if (needs.length) {
-      if (needs.includes("humid")) R.push(this._t("r_humid", { v: c.hum_max }));
+      if (needs.includes("humid")) R.push(a.rh > c.hum_max ? this._t("r_humid", { v: c.hum_max }) : this._t("tr_rising", { d: this._n(a.trH.d, 0) }));
       if (needs.includes("mold")) R.push(this._t("r_mold"));
       if (needs.includes("co2")) {
         if (a.aq != null && a.aqWorst !== "co2" && a.aqLevel !== "ok")
@@ -894,13 +1028,65 @@ class AuraClimateCard extends HTMLElement {
     a.showDuration = key === "v_now" || key === "v_cool";
   }
 
+  _afterVentilation(a, out) {
+    const c = a.cfg;
+    const R = a.reasons;
+    const idx = this._rooms.indexOf(a.room);
+    // Lüft-Timer (ohne Fenstersensor manuell, mit Sensor automatisch)
+    if (a.windowOpen) {
+      a.timer = { elapsed: a.openMin, dur: a.duration, auto: true };
+    } else if (!a.hasWindow && c.show_vent_timer) {
+      const T = this._timers();
+      const k = this._timerKey(a.room, idx);
+      if (T[k]) {
+        const el = (Date.now() - T[k]) / 60000;
+        if (el > a.duration + 60) {
+          delete T[k];
+          this._saveTimers();
+        } else {
+          a.timer = { elapsed: Math.floor(el), dur: a.duration, auto: false, start: T[k] };
+          a.reasons.length = 0;
+          if (el >= a.duration) {
+            a.vKey = "v_close";
+            a.vLevel = "warn";
+            R.push(this._t("vt_done"));
+          } else {
+            a.vKey = "v_open";
+            a.vLevel = "info";
+            R.push(this._t("vt_left", { m: Math.ceil(a.duration - el) }));
+          }
+          a.showDuration = false;
+        }
+      }
+    }
+    // Heizverlust
+    a.loss = this._heatLoss(a, out);
+    if (a.loss && a.windowOpen && a.loss.nowKwh >= 0.01) R.push(this._t("hl_now", a.loss.now));
+    // Ent-/Befeuchter-Empfehlung
+    a.advice = [];
+    if (a.dehum) {
+      // nur nicht empfehlen, wenn Lüften die Feuchte selbst senkt
+      const want = !a.windowOpen && (a.rh > c.hum_max || a.mold !== "low") && !(a.vKey === "v_now" && a.drier);
+      if (!a.dehum.on && want) a.advice.push({ id: a.dehum.id, svc: "turn_on", key: "adv_dehum_on" });
+      else if (a.dehum.on && (a.windowOpen || a.rh < c.hum_min + 5)) a.advice.push({ id: a.dehum.id, svc: "turn_off", key: "adv_dehum_off" });
+    }
+    if (a.hum) {
+      if (!a.hum.on && !a.windowOpen && a.rh < c.hum_min) a.advice.push({ id: a.hum.id, svc: "turn_on", key: "adv_hum_on" });
+      else if (a.hum.on && (a.windowOpen || a.rh > c.hum_max - 5)) a.advice.push({ id: a.hum.id, svc: "turn_off", key: "adv_hum_off" });
+    }
+    // Vorhersage-Hinweis, wenn Lüften jetzt nichts bringt
+    const bt = this._best;
+    if (bt && bt.mode === "dry" && (a.vKey === "v_useless" || a.vKey === "v_cellar_closed") && bt.ah < a.ah - Number(c.vent_threshold))
+      R.push(this._t("fc_later", { f: this._hourFmt(bt.from), t: this._hourFmt(bt.to), ah: this._n(bt.ah, this._dA) }));
+  }
+
   /* ---------- Verlauf ---------- */
   async _loadHistory() {
     const c = this._config;
-    if (!this._hass || (!c.show_history && !c.show_mold)) return;
+    if (!this._hass || (!c.show_history && !c.show_mold && !c.show_trends && !c.show_heat_loss)) return;
     if (this._histLoading || Date.now() - this._histAt < 10 * 60 * 1000) return;
     const ids = new Set([c.outdoor_temperature]);
-    this._rooms.forEach((r) => [r.temperature, r.humidity, r.wall_temperature].forEach((i) => ids.add(i)));
+    this._rooms.forEach((r) => [r.temperature, r.humidity, r.wall_temperature, r.co2, r.window].forEach((i) => ids.add(i)));
     const list = [...ids].filter((i) => i && this._hass.states[i]);
     if (!list.length) return;
     this._histLoading = true;
@@ -911,15 +1097,8 @@ class AuraClimateCard extends HTMLElement {
         "GET",
         `history/period/${start}?filter_entity_id=${list.join(",")}&minimal_response&no_attributes&significant_changes_only=0`
       );
-      const map = {};
-      (res || []).forEach((arr) => {
-        if (!arr?.length) return;
-        const id = arr[0].entity_id;
-        map[id] = arr
-          .map((p) => ({ t: new Date(p.last_changed || p.last_updated).getTime(), v: parseFloat(p.state) }))
-          .filter((p) => isFinite(p.v) && isFinite(p.t));
-      });
-      this._hist = { map, hours, from: Date.now() - hours * 3600e3, to: Date.now() };
+      const { map, raw } = this._parseHistory(res);
+      this._hist = { map, raw, hours, from: Date.now() - hours * 3600e3, to: Date.now() };
       this._histAt = Date.now();
       this._sig = "";
       this._update();
@@ -930,6 +1109,147 @@ class AuraClimateCard extends HTMLElement {
     } finally {
       this._histLoading = false;
     }
+  }
+
+  _parseHistory(res) {
+    const map = {},
+      raw = {};
+    (res || []).forEach((arr) => {
+      if (!arr?.length) return;
+      const id = arr[0].entity_id;
+      const pts = arr.map((p) => ({ t: new Date(p.last_changed || p.last_updated).getTime(), s: p.state })).filter((p) => isFinite(p.t));
+      raw[id] = pts;
+      map[id] = pts.map((p) => ({ t: p.t, v: parseFloat(p.s) })).filter((p) => isFinite(p.v));
+    });
+    return { map, raw };
+  }
+
+  // 7 Tage Verlauf für die Schimmel-Wochenbilanz (stündlich aktualisiert)
+  async _loadWeek() {
+    const c = this._config;
+    if (!this._hass || !c.show_mold_week || this._weekLoading || Date.now() - this._weekAt < 60 * 60 * 1000) return;
+    const ids = new Set([c.outdoor_temperature]);
+    this._rooms.forEach((r) => [r.temperature, r.humidity, r.wall_temperature].forEach((i) => ids.add(i)));
+    const list = [...ids].filter((i) => i && this._hass.states[i]);
+    if (!list.length) return;
+    this._weekLoading = true;
+    try {
+      const from = Date.now() - 168 * 3600e3;
+      const res = await this._hass.callApi(
+        "GET",
+        `history/period/${new Date(from).toISOString()}?filter_entity_id=${list.join(",")}&minimal_response&no_attributes`
+      );
+      this._week = { map: this._parseHistory(res).map, hours: 168, from, to: Date.now() };
+      this._weekAt = Date.now();
+      this._sig = "";
+      this._update();
+    } catch (e) {
+      this._weekAt = Date.now();
+      console.warn("aura-climate-card: week history", e);
+    } finally {
+      this._weekLoading = false;
+    }
+  }
+
+  // Trend über die letzten 30 min: { d, dir, strong } oder null
+  _trend(id, cur, kind) {
+    if (!this._config.show_trends || cur == null) return null;
+    const s = this._hist?.map?.[id];
+    if (!s?.length) return null;
+    const past = this._at(s, Date.now() - 30 * 60e3);
+    if (past == null || s[0].t > Date.now() - 30 * 60e3) return null;
+    const d = cur - past;
+    const [weak, strong] = kind === "t" ? [0.3, 1] : kind === "h" ? [3, 8] : [100, 300];
+    if (Math.abs(d) < weak) return null;
+    return { d, dir: d > 0 ? 1 : -1, strong: Math.abs(d) >= strong };
+  }
+  _arrow(tr, unit, dec) {
+    if (!tr) return "";
+    const ch = tr.dir > 0 ? (tr.strong ? "↑" : "↗") : tr.strong ? "↓" : "↘";
+    return `<span class="trend ${tr.dir > 0 ? "up" : "dn"} ${tr.strong ? "strong" : ""}" title="${tr.d > 0 ? "+" : ""}${this._n(tr.d, dec)} ${unit} / 30 min">${ch}</span>`;
+  }
+
+  /* ---------- Wettervorhersage ---------- */
+  async _subscribeForecast() {
+    const c = this._config;
+    if (!c.weather || !c.show_forecast || !this._hass?.connection || this._fcEntity === c.weather || this._fcPending) return;
+    if (!this._hass.states[c.weather]) return;
+    this._fcPending = true;
+    try {
+      this._fcUnsub = await this._hass.connection.subscribeMessage(
+        (m) => {
+          this._fc = Array.isArray(m?.forecast) ? m.forecast : [];
+          this._sig = "";
+          this._update();
+        },
+        { type: "weather/subscribe_forecast", entity_id: c.weather, forecast_type: "hourly" }
+      );
+      this._fcEntity = c.weather;
+    } catch (e) {
+      console.warn("aura-climate-card: forecast (hourly) not available", e);
+      this._fcEntity = c.weather;
+      this._fc = null;
+    } finally {
+      this._fcPending = false;
+    }
+  }
+  _unsubForecast() {
+    try {
+      if (typeof this._fcUnsub === "function") this._fcUnsub();
+    } catch (e) {
+      /* ignore */
+    }
+    this._fcUnsub = null;
+    this._fcEntity = null;
+    this._fc = null;
+  }
+  _hourFmt(ts) {
+    return new Intl.DateTimeFormat(this._lang === "de" ? "de-DE" : "en-US", { hour: "2-digit", minute: this._lang === "de" ? undefined : "2-digit" })
+      .format(new Date(ts))
+      .replace(/\s?Uhr$/, "");
+  }
+  // bestes 2-h-Fenster: trockenste Außenluft (Heizperiode) oder kühlste Luft (Sommer)
+  _bestTime(all) {
+    const c = this._config;
+    if (!c.show_forecast || !Array.isArray(this._fc) || !this._fc.length) return null;
+    const now = Date.now();
+    const pts = this._fc
+      .map((f) => {
+        const ts = new Date(f.datetime).getTime();
+        const T = Number(f.temperature);
+        const rh = f.humidity != null ? Number(f.humidity) : null;
+        const td = f.dew_point != null ? Number(f.dew_point) : null;
+        let ah = null;
+        if (isFinite(T) && rh != null && isFinite(rh)) ah = Phys.ah(T, rh);
+        else if (isFinite(T) && td != null && isFinite(td)) ah = (216.7 * Phys.es(td)) / (273.15 + T);
+        const rain = Number(f.precipitation_probability ?? 0) > 60 || Number(f.precipitation ?? 0) > 0.3;
+        return { ts, T, ah, rain };
+      })
+      .filter((p) => isFinite(p.ts) && isFinite(p.T) && p.ts >= now - 45 * 60e3 && p.ts <= now + 18 * 3600e3)
+      .sort((a, b) => a.ts - b.ts);
+    if (pts.length < 2) return null;
+    const valid = all.filter((a) => a.valid);
+    const tin = valid.length ? valid.reduce((x, a) => x + a.t, 0) / valid.length : null;
+    const hourOf = (ts) => new Date(ts).getHours();
+    const blocks = [];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i],
+        b = pts[i + 1];
+      if (b.ts - a.ts > 2 * 3600e3 || a.rain || b.rain) continue;
+      blocks.push({ from: a.ts, to: b.ts + 3600e3, T: (a.T + b.T) / 2, ah: a.ah != null && b.ah != null ? (a.ah + b.ah) / 2 : null, i });
+    }
+    if (!blocks.length) return null;
+    // Sommer: drinnen zu warm und es wird draußen deutlich kühler
+    if (tin != null && tin > c.temp_max) {
+      const cool = blocks.filter((b) => b.T < tin - 2).sort((x, y) => x.T - y.T)[0];
+      if (cool) return { mode: "cool", ...cool };
+    }
+    const day = blocks.filter((b) => b.ah != null && hourOf(b.from) >= 7 && hourOf(b.from) <= 21);
+    if (!day.length) return null;
+    const best = day.slice().sort((x, y) => x.ah - y.ah)[0];
+    const nowBlock = day.find((b) => b.from <= now + 30 * 60e3);
+    const nowGood = nowBlock && nowBlock.ah - best.ah < 0.3;
+    return { mode: "dry", ...best, nowGood };
   }
 
   // Wert einer Treppenfunktion zum Zeitpunkt ts
@@ -943,8 +1263,7 @@ class AuraClimateCard extends HTMLElement {
     return v;
   }
 
-  _moldHours(room) {
-    const h = this._hist;
+  _moldHours(room, h = this._hist, stepMin = 5) {
     const rc = this._cfgFor(room);
     if (!h) return null;
     const T = h.map[room.temperature],
@@ -952,7 +1271,7 @@ class AuraClimateCard extends HTMLElement {
     if (!T?.length || !H?.length) return null;
     const W = h.map[room.wall_temperature];
     const O = h.map[this._config.outdoor_temperature];
-    const step = 5 * 60e3;
+    const step = stepMin * 60e3;
     let above = 0;
     for (let ts = h.from + step / 2; ts < h.to; ts += step) {
       const t = this._at(T, ts),
@@ -967,6 +1286,55 @@ class AuraClimateCard extends HTMLElement {
       if (Phys.rhAt(Phys.vapor(t, rh), wall) >= rc.mold_alarm) above += step;
     }
     return above / 3600e3;
+  }
+
+  /* ---------- Heizverlust offenes Fenster ----------
+     Q = 0,34 Wh/(m³·K) · V · n_offen · ΔT · t */
+  _heatLoss(a, out) {
+    const c = this._config;
+    if (!c.show_heat_loss || !a.hasWindow || !out.hasT || !a.valid || a.t <= out.t) return null;
+    const V = Number(a.room.volume ?? c.default_volume) || 40;
+    const kw = (0.34 * V * (Number(c.ach_open) || 6) * (a.t - out.t)) / 1000;
+    const now = Date.now();
+    const midnight = new Date();
+    midnight.setHours(0, 0, 0, 0);
+    const isOpen = (st) => ["on", "open", "opening", "tilted", "true"].includes(String(st).toLowerCase());
+    let todayH = 0;
+    const raw = this._hist?.raw?.[a.room.window];
+    if (raw?.length) {
+      for (let i = 0; i < raw.length; i++) {
+        if (!isOpen(raw[i].s)) continue;
+        const from = Math.max(raw[i].t, midnight.getTime());
+        const to = i + 1 < raw.length ? raw[i + 1].t : now;
+        if (to > from) todayH += (to - from) / 3600e3;
+      }
+    }
+    const curH = a.windowOpen ? a.openMin / 60 : 0;
+    if (!raw?.length) todayH = curH;
+    const fmt = (kwh) => ({ k: this._n(kwh, kwh < 1 ? 2 : 1), c: `${this._n(kwh * Number(c.heat_price || 0), 2)} ${c.currency || "€"}` });
+    return { now: fmt(kw * curH), today: fmt(kw * todayH), todayKwh: kw * todayH, nowKwh: kw * curH };
+  }
+
+  /* ---------- Lüft-Timer ---------- */
+  _timerKey(room, i) {
+    return `${this._config.title || ""}|${room.name || i}`;
+  }
+  _timers() {
+    if (!this._vt) {
+      try {
+        this._vt = JSON.parse(localStorage.getItem("aura-climate-vt") || "{}");
+      } catch (e) {
+        this._vt = {};
+      }
+    }
+    return this._vt;
+  }
+  _saveTimers() {
+    try {
+      localStorage.setItem("aura-climate-vt", JSON.stringify(this._vt || {}));
+    } catch (e) {
+      /* ignore */
+    }
   }
 
   /* ---------- Aktionen ---------- */
@@ -986,17 +1354,20 @@ class AuraClimateCard extends HTMLElement {
     }
     const c = this._config;
     const ids = [c.outdoor_temperature, c.outdoor_humidity];
-    this._rooms.forEach((r) => ids.push(r.temperature, r.humidity, r.window, r.co2, r.wall_temperature, r.mold, ...toList(r.climate), r.voc, r.pm25, r.pm10, r.presence, r.wall_learn));
+    if (this._config.weather) ids.push(this._config.weather);
+    this._rooms.forEach((r) => ids.push(r.temperature, r.humidity, r.window, r.co2, r.wall_temperature, r.mold, ...toList(r.climate), r.voc, r.pm25, r.pm10, r.presence, r.wall_learn, r.dehumidifier, r.humidifier));
     const sig = ids
       .map((i) => {
         const s = this._st(i);
         return s ? s.state + "|" + (s.attributes?.temperature ?? "") + "|" + (s.attributes?.hvac_action ?? "") + "|" + s.last_changed : "";
       })
-      .join(";") + `#${this._sel}#${this._detail}#${this._lang}#${this._wallPanel}#${this._climPanel}#${this._wallMsg?.text || ""}`;
+      .join(";") + `#${(this._fc || []).length}#${this._weekAt}#${this._histAt}#${this._sel}#${this._detail}#${this._lang}#${this._wallPanel}#${this._climPanel}#${this._wallMsg?.text || ""}`;
     if (sig === this._sig) return;
     this._sig = sig;
     this._render();
     this._loadHistory();
+    this._loadWeek();
+    this._subscribeForecast();
   }
 
   _render() {
@@ -1011,6 +1382,8 @@ class AuraClimateCard extends HTMLElement {
     col.info = toColor(c.color_info, AURA_DEFAULTS.color_info);
     this._col = col;
     const out = this._outdoor();
+    // Vorhersage zuerst grob mit Raumtemperaturen, dann Räume analysieren
+    this._best = this._bestTime(this._rooms.map((r) => ({ valid: this._num(r.temperature) != null, t: this._num(r.temperature) })));
     const all = this._rooms.map((r) => this._analyze(r, out));
     this._all = all;
 
@@ -1031,7 +1404,9 @@ class AuraClimateCard extends HTMLElement {
       <ha-card>
         ${title || outHtml ? `<div class="head"><div class="title">${title ? esc(title) : ""}</div>${outHtml}</div>` : ""}
         ${this._rooms.length && c.show_summary ? this._renderSummary(all) : ""}
+        ${this._renderForecast(out)}
         ${body}
+        ${c.show_mold_week && this._rooms.length ? this._renderMoldWeek(all) : ""}
       </ha-card>`;
     this._bind();
     this._setupTabs();
@@ -1084,6 +1459,41 @@ class AuraClimateCard extends HTMLElement {
       <b>${this._n(out.t, this._dT)} °C</b><span>${this._n(out.rh, this._dH)} %</span>
       ${out.ok ? `<span class="dim">${this._n(out.ah, this._dA)} g/m³</span>` : ""}
     </button>`;
+  }
+
+  _renderForecast(out) {
+    const b = this._best;
+    if (!b) return "";
+    let txt;
+    if (b.mode === "cool") txt = this._t("fc_cool", { f: this._hourFmt(b.from), t: this._hourFmt(b.to), tmp: this._n(b.T, 0) });
+    else if (b.nowGood) txt = this._t("fc_now", { ah: this._n(b.ah, this._dA) });
+    else txt = this._t("fc_best", { f: this._hourFmt(b.from), t: this._hourFmt(b.to), ah: this._n(b.ah, this._dA), n: out.ok ? this._n(out.ah, this._dA) : "–" });
+    return `<button class="fcst ${b.nowGood ? "good" : ""}" data-entity="${esc(this._config.weather)}">${icon("clock")}<span>${esc(txt)}</span></button>`;
+  }
+
+  _renderMoldWeek(all) {
+    const w = this._week;
+    if (!w) return "";
+    const rows = all
+      .map((a, i) => ({ a, i, h: this._moldHours(a.room, w, 15) }))
+      .filter((r) => r.h != null)
+      .sort((x, y) => y.h - x.h);
+    if (!rows.length) return "";
+    const max = Math.max(24, ...rows.map((r) => r.h));
+    const lv = (h) => (h >= 42 ? "alarm" : h >= 6 ? "warn" : "ok");
+    return `<div class="mweek">
+      <div class="ch">${icon("mold")}<span>${this._t("mw_title")}</span></div>
+      <div class="msub2">${this._t("mw_sub", { v: this._config.mold_alarm })}</div>
+      ${rows
+        .map(
+          (r) => `<button class="mwrow lv-${lv(r.h)}" ${this._config.layout === "grid" ? `data-detail="${r.i}"` : `data-room="${r.i}"`}>
+          <span class="mwn">${esc(r.a.room.name || "#" + (r.i + 1))}</span>
+          <span class="mwb"><i style="width:${Math.max(r.h > 0 ? 2 : 0, (r.h / max) * 100).toFixed(1)}%"></i></span>
+          <span class="mwh">${this._t("mw_hours", { h: this._n(r.h, r.h < 10 ? 1 : 0) })}</span>
+        </button>`
+        )
+        .join("")}
+    </div>`;
   }
 
   _renderSummary(all) {
@@ -1188,7 +1598,7 @@ class AuraClimateCard extends HTMLElement {
         k: "show_co2",
         ic: "co2",
         label: this._t("co2"),
-        val: `${a.co2Est ? "~" : ""}${this._n(a.co2, 0)} ppm`,
+        val: `${a.co2Est ? "~" : ""}${this._n(a.co2, 0)} ppm${this._arrow(a.trC, "ppm", 0)}`,
         sub: a.co2Est ? `${this._t("est")} · ${this._t("persons", { n: this._n(a.persons, 0) })}` : "",
         ent: r.co2 || r.presence || r.window,
         cls: lv ? "lv-" + lv : "",
@@ -1213,9 +1623,25 @@ class AuraClimateCard extends HTMLElement {
         ic: a.windowOpen ? "windowOpen" : "window",
         label: this._t("window"),
         val: a.windowOpen ? `${this._t("open")} · ${a.openMin} min` : this._t("closed"),
+        sub: a.loss ? (a.windowOpen ? (a.loss.nowKwh >= 0.01 ? this._t("hl_open", a.loss.now) : "") : a.loss.todayKwh >= 0.01 ? this._t("hl_today", a.loss.today) : "") : "",
         ent: r.window,
         cls: a.windowOpen ? "lv-info" : "",
       });
+    [
+      [a.dehum, "dev_dehum", "dehum"],
+      [a.hum, "dev_hum", "drop"],
+    ].forEach(([d, lbl, ic]) => {
+      if (!d) return;
+      tiles.push({
+        k: "show_devices",
+        ic,
+        label: this._t(lbl),
+        val: this._t(d.on ? "dev_on" : "dev_off"),
+        sub: d.target != null ? this._t("dev_target", { v: this._n(Number(d.target), 0) }) : "",
+        ent: d.id,
+        cls: d.on ? "lv-info" : "",
+      });
+    });
     if (a.target != null)
       tiles.push({
         k: "show_target",
@@ -1287,8 +1713,8 @@ class AuraClimateCard extends HTMLElement {
         <circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="7" fill="var(--card-bg)" stroke="${col.hum}" stroke-width="3"/>
       </svg>
       <button class="gcenter" data-entity="${esc(a.room.temperature)}">
-        <div class="gtemp" style="color:${tOk ? "var(--primary-text-color)" : col.temp}">${this._n(a.t, this._dT)}<small>°C</small></div>
-        <div class="ghum" data-entity="${esc(a.room.humidity)}">${icon("drop")}${this._n(a.rh, this._dH)} %</div>
+        <div class="gtemp" style="color:${tOk ? "var(--primary-text-color)" : col.temp}">${this._n(a.t, this._dT)}<small>°C</small>${this._arrow(a.trT, "°C", 1)}</div>
+        <div class="ghum" data-entity="${esc(a.room.humidity)}">${icon("drop")}${this._n(a.rh, this._dH)} %${this._arrow(a.trH, "%", 0)}</div>
         <div class="gcomf ${a.comfort.length ? "bad" : ""}">${comfort}</div>
       </button>
     </div>`;
@@ -1330,12 +1756,14 @@ class AuraClimateCard extends HTMLElement {
 
   _renderVent(a) {
     const out = this._outdoor();
-    const ic = a.vKey === "v_heat" ? "flame" : a.windowOpen ? "windowOpen" : a.vKey === "v_ok" ? "check" : a.vKey === "v_keep" ? "sun" : "wind";
+    const ic =
+      a.vKey === "v_heat" ? "flame" : a.windowOpen ? "windowOpen" : a.vKey === "v_ok" ? "check" : a.vKey === "v_keep" ? "sun" : a.cellar ? "cellar" : a.timer ? "clock" : "wind";
     return `<div class="vent lv-${a.vLevel}">
       <div class="vic">${icon(ic)}</div>
       <div class="vtx">
         <div class="vh">${this._t(a.vKey)}${a.showDuration ? `<span class="vdur">${this._t("dur", { m: a.duration })}</span>` : ""}</div>
         ${a.reasons.length && this._config.show_reasons ? `<ul>${a.reasons.map((r) => `<li>${esc(r)}</li>`).join("")}</ul>` : ""}
+        ${this._renderTimer(a)}
       </div>
       ${out.ok && this._config.show_ah_compare ? `<div class="vcmp" title="${this._t("abs_humidity")}">
         <div><span>${this._n(a.ah, this._dA)}</span><small>${this._t("inside")}</small></div>
@@ -1344,6 +1772,25 @@ class AuraClimateCard extends HTMLElement {
         <em>g/m³</em>
       </div>` : ""}
     </div>`;
+  }
+
+  _renderTimer(a) {
+    const c = this._config;
+    const idx = this._all.indexOf(a);
+    let html = "";
+    if (a.timer) {
+      const pct = Math.min(100, (a.timer.elapsed / Math.max(1, a.timer.dur)) * 100);
+      html += `<div class="vbar ${pct >= 100 ? "done" : ""}"><i style="width:${pct.toFixed(0)}%"></i></div>
+        <div class="vbt">${a.timer.elapsed} / ${a.timer.dur} min</div>`;
+    }
+    const btns = [];
+    if (!a.hasWindow && c.show_vent_timer) {
+      if (a.timer) btns.push(`<button class="wbtn" data-vstop="${idx}">${icon("stop")}${this._t("vt_stop")}</button>`);
+      else if (["v_now", "v_cool"].includes(a.vKey)) btns.push(`<button class="wbtn pri" data-vstart="${idx}">${icon("play")}${this._t("vt_start")}</button>`);
+    }
+    (a.advice || []).forEach((ad) => btns.push(`<button class="wbtn ${ad.svc === "turn_on" ? "pri" : ""}" data-svc="${ad.svc}" data-svcent="${esc(ad.id)}">${icon(ad.id === a.dehum?.id ? "dehum" : "drop")}${this._t(ad.key)}</button>`));
+    if (btns.length) html += `<div class="vbtns">${btns.join("")}</div>`;
+    return html;
   }
 
   _renderMold(a) {
@@ -1502,6 +1949,35 @@ hy = [10, 90];
         rerender();
       })
     );
+    root.querySelectorAll("[data-vstart]").forEach((b) =>
+      b.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        const i = Number(b.dataset.vstart);
+        this._timers()[this._timerKey(this._rooms[i], i)] = Date.now();
+        this._saveTimers();
+        rerender();
+      })
+    );
+    root.querySelectorAll("[data-vstop]").forEach((b) =>
+      b.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        const i = Number(b.dataset.vstop);
+        delete this._timers()[this._timerKey(this._rooms[i], i)];
+        this._saveTimers();
+        rerender();
+      })
+    );
+    root.querySelectorAll("[data-svc]").forEach((b) =>
+      b.addEventListener("click", async (ev) => {
+        ev.stopPropagation();
+        b.disabled = true;
+        try {
+          await this._hass.callService("homeassistant", b.dataset.svc, { entity_id: b.dataset.svcent });
+        } catch (e) {
+          console.warn("aura-climate-card: service", e);
+        }
+      })
+    );
     root.querySelectorAll("[data-clim]").forEach((b) =>
       b.addEventListener("click", (ev) => {
         ev.stopPropagation();
@@ -1654,6 +2130,27 @@ hy = [10, 90];
     .crow .ic{color:var(--secondary-text-color)}.crow.heat .ic{color:var(--warn)}.crow.off{opacity:.55}
     .cn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .cv{white-space:nowrap;font-size:.9em;color:var(--secondary-text-color)}.cv b{color:var(--primary-text-color)}
+    .trend{font-size:.7em;margin-left:3px;font-weight:700;color:var(--secondary-text-color);vertical-align:super}
+    .trend.up.strong{color:var(--warn)}.trend.dn.strong{color:var(--info)}
+    .gtemp .trend{font-size:.38em;letter-spacing:0}
+    .fcst{display:flex;align-items:center;gap:8px;margin-top:8px;padding:8px 12px;border-radius:12px;font-size:.88em;width:100%;box-sizing:border-box;
+      background:color-mix(in srgb,var(--info) 12%,transparent);color:color-mix(in srgb,var(--info) 60%,var(--primary-text-color))}
+    .fcst.good{background:color-mix(in srgb,var(--ok) 15%,transparent);color:color-mix(in srgb,var(--ok) 65%,var(--primary-text-color))}
+    .vbar{height:6px;border-radius:9px;background:var(--soft2);margin-top:8px;overflow:hidden}
+    .vbar i{display:block;height:100%;background:var(--c);border-radius:9px;transition:width .5s}
+    .vbar.done i{background:var(--warn)}
+    .vbt{font-size:.72em;color:var(--secondary-text-color);margin-top:3px}
+    .vbtns{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+    .vbtns .wbtn{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;font-size:.85em}
+    .vbtns .wbtn .ic{width:15px;height:15px}
+    .mweek{margin-top:12px;padding:12px 14px;border-radius:16px;background:var(--soft)}
+    .mweek .ch{justify-content:flex-start;gap:6px}
+    .msub2{font-size:.72em;color:var(--secondary-text-color);margin:2px 0 8px}
+    .mwrow{display:grid;grid-template-columns:minmax(80px,30%) 1fr 54px;align-items:center;gap:10px;width:100%;padding:4px 0;font-size:.85em}
+    .mwn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .mwb{height:8px;border-radius:9px;background:var(--soft2);overflow:hidden}
+    .mwb i{display:block;height:100%;background:var(--c);border-radius:9px}
+    .mwh{text-align:right;font-weight:600}
     .cond{display:flex;align-items:center;gap:6px;margin-top:8px;color:var(--alarm);font-weight:600;font-size:.88em}
     .charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin-top:12px}
     .chart{padding:10px 12px 6px;border-radius:16px;background:var(--soft)}
@@ -1685,6 +2182,21 @@ hy = [10, 90];
 const ED_I18N = {
   de: {
     title: "Titel",
+    g_forecast: "Wettervorhersage (beste Lüftungszeit)",
+    weather: "Wetter-Entität (stündliche Vorhersage)",
+    show_forecast: "Beste Lüftungszeit anzeigen",
+    show_trends: "Trendpfeile",
+    show_mold_week: "Schimmel-Wochenbilanz",
+    show_devices: "Ent-/Befeuchter",
+    show_vent_timer: "Lüft-Timer (Räume ohne Fenstersensor)",
+    show_heat_loss: "Heizverlust offener Fenster",
+    heat_price: "Wärmepreis (pro kWh)",
+    currency: "Währung",
+    room_type: "Raumart",
+    rt_normal: "Wohnraum",
+    rt_cellar: "Keller (Taupunktlüftung)",
+    dehumidifier: "Entfeuchter (optional)",
+    humidifier: "Befeuchter (optional)",
     wall_learn: "Wandpunkt-Lernspeicher (input_text, optional)",
     wall_learn_help: "Helfer anlegen: Einstellungen → Geräte & Dienste → Helfer → Text, z. B. „Aura Wand Schlafzimmer“. Danach auf die Kachel Wandoberfläche tippen und eine Messung eintragen.",
     wall_temperature_help: "Mit Lernspeicher kann der Sensor nach ein paar Tagen in den nächsten Raum wandern – der gelernte Wert bleibt.",
@@ -1812,6 +2324,21 @@ const ED_I18N = {
   },
   en: {
     title: "Title",
+    g_forecast: "Weather forecast (best time to ventilate)",
+    weather: "Weather entity (hourly forecast)",
+    show_forecast: "Show best time to ventilate",
+    show_trends: "Trend arrows",
+    show_mold_week: "Mold balance (week)",
+    show_devices: "De-/humidifier",
+    show_vent_timer: "Ventilation timer (rooms without window sensor)",
+    show_heat_loss: "Heat loss of open windows",
+    heat_price: "Heat price (per kWh)",
+    currency: "Currency",
+    room_type: "Room type",
+    rt_normal: "Living space",
+    rt_cellar: "Cellar (dew point ventilation)",
+    dehumidifier: "Dehumidifier (optional)",
+    humidifier: "Humidifier (optional)",
     wall_learn: "Wall spot learning storage (input_text, optional)",
     wall_learn_help: "Create a helper: Settings → Devices & services → Helpers → Text, e.g. “Aura wall bedroom”. Then tap the wall surface tile and enter a measurement.",
     wall_temperature_help: "With learning storage the sensor can move on to the next room after a few days – the learned value stays.",
@@ -2011,6 +2538,10 @@ class AuraClimateCardEditor extends HTMLElement {
         { name: "outdoor_temperature", selector: { entity: { domain: "sensor", device_class: "temperature" } } },
         { name: "outdoor_humidity", selector: { entity: { domain: "sensor", device_class: "humidity" } } },
       ]),
+      sec("g_forecast", l.g_forecast, "mdi:weather-partly-cloudy", [
+        { name: "weather", selector: { entity: { domain: "weather" } } },
+        { name: "show_forecast", selector: { boolean: {} } },
+      ]),
       sec("g_layout", l.g_layout, "mdi:view-dashboard-outline", [
         bools(["show_title", "show_outdoor", "show_summary", "show_tabs", "show_gauge", "show_ventilation", "show_mold", "show_comfort_chart", "show_history"]),
         { type: "grid", name: "", schema: [
@@ -2021,10 +2552,10 @@ class AuraClimateCardEditor extends HTMLElement {
         { type: "grid", name: "", schema: [num("font_scale", 60, 160, 5), num("grid_min_width", 100, 400, 10)] },
       ]),
       sec("g_tiles", l.g_tiles, "mdi:view-grid-outline", [
-        bools(["show_air_quality", "show_dewpoint", "show_abs_humidity", "show_wall", "show_co2", "show_voc", "show_pm", "show_window", "show_target", "show_mold_sensor"]),
+        bools(["show_air_quality", "show_dewpoint", "show_abs_humidity", "show_wall", "show_co2", "show_voc", "show_pm", "show_window", "show_target", "show_mold_sensor", "show_devices"]),
       ]),
       sec("g_details", l.g_details, "mdi:chart-bell-curve", [
-        bools(["show_reasons", "show_ah_compare", "show_mold_hours", "show_history_temp", "show_history_hum", "show_comfort_others", "show_outdoor_in_chart"]),
+        bools(["show_trends", "show_mold_week", "show_reasons", "show_ah_compare", "show_mold_hours", "show_history_temp", "show_history_hum", "show_comfort_others", "show_outdoor_in_chart"]),
         { type: "grid", name: "", schema: [num("history_hours", 1, 168, 1), num("chart_temp_min", 0, 30, 1), num("chart_temp_max", 15, 45, 1)] },
       ]),
       sec("g_limits", l.limits, "mdi:tune-variant", [
@@ -2037,6 +2568,8 @@ class AuraClimateCardEditor extends HTMLElement {
         { type: "grid", name: "", schema: [num("vent_min_freezing", 1, 60, 1), num("vent_min_cold", 1, 60, 1), num("vent_min_cool", 1, 60, 1), num("vent_min_mild", 1, 90, 1), num("vent_min_warm", 1, 120, 1)] },
         { type: "grid", name: "", schema: [num("close_tolerance", 0, 60, 1), num("close_below", -10, 30, 1)] },
         { name: "heating_alarm", selector: { boolean: {} } },
+        bools(["show_vent_timer", "show_heat_loss"]),
+        { type: "grid", name: "", schema: [num("heat_price", 0, 2, 0.01), { name: "currency", selector: { text: {} } }] },
       ]),
       sec("g_air", l.g_air, "mdi:leaf", [
         bools(["co2_estimate", "co2_estimate_vent"]),
@@ -2083,6 +2616,18 @@ class AuraClimateCardEditor extends HTMLElement {
       ent("wall_learn", "input_text"),
       ent("mold", "sensor"),
       { name: "climate", selector: { entity: { domain: "climate", multiple: true } } },
+      {
+        name: "room_type",
+        selector: { select: { mode: "dropdown", options: [{ value: "normal", label: l.rt_normal }, { value: "cellar", label: l.rt_cellar }] } },
+      },
+      {
+        type: "grid",
+        name: "",
+        schema: [
+          { name: "dehumidifier", selector: { entity: { domain: ["humidifier", "switch", "fan", "input_boolean"] } } },
+          { name: "humidifier", selector: { entity: { domain: ["humidifier", "switch", "fan", "input_boolean"] } } },
+        ],
+      },
       num("target_temperature", 5, 30, 0.5),
       {
         type: "expandable",

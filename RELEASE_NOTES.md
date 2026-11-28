@@ -1,15 +1,23 @@
-## 🇬🇧 Aura Climate Card v1.5.0 – several thermostats per room
+## 🇬🇧 Aura Climate Card v2.0.0 – big update
 
-- `climate` now accepts **one or several thermostats** per room (editor: multi-select)
-- Target tile shows the range of target temperatures and "3 thermostats · 1 heating"; tap opens a list with current → target temperature of every thermostat (tap a row for details)
-- Thermostats that are off are ignored for the target; the alarm "heating with open window" fires as soon as any of them is heating
-- Existing configurations with a single thermostat keep working
+- **Best time to ventilate today** from the hourly weather forecast (driest outdoor air; coolest hours in summer) – new option `weather`
+- **Ventilation countdown:** automatic with window sensor, start/stop button without
+- **Heat loss of open windows** in kWh and € (today / current opening)
+- **Cellar mode** (`room_type: cellar`): dew point ventilation – only ventilate when it really dries
+- **Trend arrows** for temperature, humidity and CO₂; fast rising humidity triggers ventilation advice
+- **Weekly mold balance** of all rooms (7 days)
+- **Dehumidifier / humidifier** per room with recommendation and on/off button
+- **Notification blueprint** (ventilate, mold alarm, window open too long, heating with open window) – one-click import in the README
 
-## 🇩🇪 Aura Climate Card v1.5.0 – mehrere Thermostate pro Raum
+## 🇩🇪 Aura Climate Card v2.0.0 – großes Update
 
-- `climate` nimmt jetzt **ein oder mehrere Thermostate** pro Raum (Editor: Mehrfachauswahl)
-- Soll-Kachel zeigt den Bereich der Solltemperaturen und „3 Thermostate · 1 heizt“; Tipp öffnet die Liste mit Ist → Soll jedes Thermostats (Tipp auf eine Zeile für Details)
-- Ausgeschaltete Thermostate zählen beim Sollwert nicht mit; der Alarm „Heizung bei offenem Fenster“ greift, sobald irgendeins heizt
-- Bestehende Konfigurationen mit einem Thermostat funktionieren unverändert
+- **Beste Lüftungszeit heute** aus der stündlichen Wettervorhersage (trockenste Außenluft; im Sommer kühlste Stunden) – neue Option `weather`
+- **Lüft-Countdown:** automatisch mit Fenstersensor, Start/Stopp-Knopf ohne
+- **Heizverlust offener Fenster** in kWh und € (heute / aktuelle Öffnung)
+- **Kellermodus** (`room_type: cellar`): Taupunktlüftung – nur lüften, wenn es wirklich trocknet
+- **Trendpfeile** für Temperatur, Luftfeuchte und CO₂; schnell steigende Feuchte löst die Lüftungsempfehlung aus
+- **Schimmel-Wochenbilanz** aller Räume (7 Tage)
+- **Ent-/Befeuchter** pro Raum mit Empfehlung und An/Aus-Knopf
+- **Benachrichtigungs-Blueprint** (Lüften, Schimmelalarm, Fenster zu lange offen, Heizung bei offenem Fenster) – Import per Klick in der README
 
 ☕ Gefällt dir die Karte? / Like the card? → [Buy Me a Coffee](https://buymeacoffee.com/muhkuh666)

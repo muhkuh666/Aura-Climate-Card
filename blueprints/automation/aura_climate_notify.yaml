@@ -1,0 +1,258 @@
+blueprint:
+  name: Aura Climate – Lüften & Schimmel Benachrichtigung
+  description: >
+    Push-Benachrichtigungen passend zur Aura Climate Card (pro Raum eine Automation):
+    **Lüften** (Luftfeuchte zu hoch und Außenluft trockener), **Schimmelalarm**
+    (berechnete Feuchte an der kältesten Wandstelle), **Fenster zu lange offen**
+    und **Heizung läuft bei offenem Fenster**.
+
+    Push notifications matching the Aura Climate Card (one automation per room):
+    ventilate, mold alarm, window open too long, heating with open window.
+  domain: automation
+  source_url: https://github.com/muhkuh666/Aura-Climate-Card/blob/main/blueprints/automation/aura_climate_notify.yaml
+  input:
+    room_name:
+      name: Raumname / Room name
+      default: Bad
+      selector:
+        text: {}
+    temperature:
+      name: Temperatur-Sensor / Temperature sensor
+      selector:
+        entity:
+          domain: sensor
+          device_class: temperature
+    humidity:
+      name: Luftfeuchte-Sensor / Humidity sensor
+      selector:
+        entity:
+          domain: sensor
+          device_class: humidity
+    outdoor_temperature:
+      name: Außentemperatur / Outdoor temperature
+      selector:
+        entity:
+          domain: sensor
+          device_class: temperature
+    outdoor_humidity:
+      name: Außenluftfeuchte / Outdoor humidity
+      selector:
+        entity:
+          domain: sensor
+          device_class: humidity
+    windows:
+      name: Fenster-Sensoren (optional) / Window sensors
+      default: []
+      selector:
+        entity:
+          domain: binary_sensor
+          multiple: true
+    climates:
+      name: Thermostate (optional) / Thermostats
+      default: []
+      selector:
+        entity:
+          domain: climate
+          multiple: true
+    notify_device:
+      name: Handy / Mobile device
+      selector:
+        device:
+          integration: mobile_app
+    humidity_max:
+      name: Luftfeuchte Maximum (%)
+      default: 60
+      selector:
+        number:
+          min: 40
+          max: 90
+          unit_of_measurement: "%"
+    mold_alarm:
+      name: Schimmelalarm ab Feuchte an der Wand (%)
+      default: 80
+      selector:
+        number:
+          min: 60
+          max: 100
+          unit_of_measurement: "%"
+    frsi:
+      name: Temperaturfaktor Wand fRsi (0,7 = Mindestwärmeschutz)
+      default: 0.7
+      selector:
+        number:
+          min: 0.5
+          max: 0.95
+          step: 0.01
+          mode: box
+    window_minutes:
+      name: Fenster offen – Erinnerung nach (min)
+      default: 15
+      selector:
+        number:
+          min: 2
+          max: 120
+          unit_of_measurement: min
+    close_below:
+      name: Fenster-Erinnerung nur unter Außentemperatur (°C)
+      default: 15
+      selector:
+        number:
+          min: -10
+          max: 30
+          unit_of_measurement: °C
+    enable_vent:
+      name: Lüften-Hinweis
+      default: true
+      selector:
+        boolean: {}
+    enable_mold:
+      name: Schimmelalarm
+      default: true
+      selector:
+        boolean: {}
+    enable_window:
+      name: Fenster zu lange offen
+      default: true
+      selector:
+        boolean: {}
+    enable_heating:
+      name: Heizung bei offenem Fenster
+      default: true
+      selector:
+        boolean: {}
+    cooldown:
+      name: Mindestabstand zwischen Nachrichten (min)
+      default: 60
+      selector:
+        number:
+          min: 0
+          max: 600
+          unit_of_measurement: min
+
+mode: single
+max_exceeded: silent
+
+# in Template-Triggern sind nur trigger_variables verfügbar
+trigger_variables:
+  t_in_e: !input temperature
+  h_in_e: !input humidity
+  t_out_e: !input outdoor_temperature
+  windows: !input windows
+  mold_alarm: !input mold_alarm
+  frsi: !input frsi
+
+variables:
+  room: !input room_name
+  h_out_e: !input outdoor_humidity
+  climates: !input climates
+  hum_max: !input humidity_max
+  close_below: !input close_below
+  cooldown: !input cooldown
+  enable_vent_flag: !input enable_vent
+  enable_mold_flag: !input enable_mold
+  enable_window_flag: !input enable_window
+  enable_heating_flag: !input enable_heating
+  t_in: "{{ states(t_in_e) | float(20) }}"
+  h_in: "{{ states(h_in_e) | float(50) }}"
+  t_out: "{{ states(t_out_e) | float(10) }}"
+  h_out: "{{ states(h_out_e) | float(80) }}"
+  # Magnus-Formel: Dampfdruck (hPa) und absolute Feuchte (g/m³)
+  e_in: "{{ h_in / 100 * 6.112 * e ** (17.62 * t_in / (243.12 + t_in)) }}"
+  ah_in: "{{ (216.7 * e_in / (273.15 + t_in)) | round(1) }}"
+  ah_out: "{{ (216.7 * (h_out / 100 * 6.112 * e ** (17.62 * t_out / (243.12 + t_out))) / (273.15 + t_out)) | round(1) }}"
+  t_wall: "{{ (t_out + frsi * (t_in - t_out)) if t_out < t_in else t_in }}"
+  rh_wall: "{{ [100, (e_in / (6.112 * e ** (17.62 * t_wall / (243.12 + t_wall))) * 100)] | min | round(0) }}"
+  window_open: "{{ windows | select('is_state', 'on') | list | count > 0 }}"
+  heating: >
+    {{ (climates | select('is_state_attr', 'hvac_action', 'heating') | list | count > 0)
+       or (climates | select('is_state', 'heat') | rejectattr('attributes.hvac_action', 'defined') | list | count > 0) }}
+
+trigger:
+  - platform: numeric_state
+    entity_id: !input humidity
+    above: !input humidity_max
+    for: "00:10:00"
+    id: humid
+  - platform: template
+    value_template: >
+      {% set ti = states(t_in_e) | float(20) %}{% set hi = states(h_in_e) | float(50) %}
+      {% set to = states(t_out_e) | float(10) %}{% set f = frsi | float(0.7) %}
+      {% set tw = (to + f * (ti - to)) if to < ti else ti %}
+      {% set ei = hi / 100 * 6.112 * e ** (17.62 * ti / (243.12 + ti)) %}
+      {{ ei / (6.112 * e ** (17.62 * tw / (243.12 + tw))) * 100 >= mold_alarm | float(80) }}
+    for: "00:30:00"
+    id: mold
+  - platform: template
+    value_template: "{{ windows | select('is_state', 'on') | list | count > 0 }}"
+    for:
+      minutes: !input window_minutes
+    id: window_long
+  - platform: template
+    value_template: "{{ windows | select('is_state', 'on') | list | count > 0 }}"
+    for: "00:02:00"
+    id: window_heat
+
+action:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: humid
+          - "{{ enable_vent_flag }}"
+          - "{{ not window_open }}"
+        sequence:
+          - if:
+              - "{{ ah_out < ah_in - 1 }}"
+            then:
+              - device_id: !input notify_device
+                domain: mobile_app
+                type: notify
+                title: "💨 {{ room }} lüften"
+                message: >
+                  Luftfeuchte {{ h_in | round(0) }} % – Außenluft ist trockener
+                  ({{ ah_out }} statt {{ ah_in }} g/m³). Jetzt kurz stoßlüften.
+            else:
+              - device_id: !input notify_device
+                domain: mobile_app
+                type: notify
+                title: "💧 {{ room }}: Luft zu feucht"
+                message: >
+                  Luftfeuchte {{ h_in | round(0) }} %, aber die Außenluft ist feuchter
+                  ({{ ah_out }} g/m³) – Lüften bringt nichts. Heizen oder entfeuchten.
+      - conditions:
+          - condition: trigger
+            id: mold
+          - "{{ enable_mold_flag }}"
+        sequence:
+          - device_id: !input notify_device
+            domain: mobile_app
+            type: notify
+            title: "🍄 Schimmelgefahr {{ room }}"
+            message: >
+              An der kältesten Wandstelle (≈ {{ t_wall | round(1) }} °C) liegt die Feuchte
+              bei ca. {{ rh_wall }} % – seit 30 min über {{ mold_alarm }} %. Lüften oder entfeuchten.
+      - conditions:
+          - condition: trigger
+            id: window_long
+          - "{{ enable_window_flag }}"
+          - "{{ t_out < close_below | float(15) }}"
+        sequence:
+          - device_id: !input notify_device
+            domain: mobile_app
+            type: notify
+            title: "🪟 {{ room }}: Fenster schließen"
+            message: >
+              Das Fenster ist schon länger offen (draußen {{ t_out | round(1) }} °C).
+              Stoßlüften reicht – bitte schließen.
+      - conditions:
+          - condition: trigger
+            id: window_heat
+          - "{{ enable_heating_flag }}"
+          - "{{ heating }}"
+        sequence:
+          - device_id: !input notify_device
+            domain: mobile_app
+            type: notify
+            title: "🔥 {{ room }}: Heizung bei offenem Fenster"
+            message: Die Heizung läuft, während das Fenster offen ist. Heizung herunterdrehen oder Fenster schließen.
+  - delay:
+      minutes: "{{ cooldown | int(60) }}"
