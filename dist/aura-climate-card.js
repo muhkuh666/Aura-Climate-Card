@@ -2,7 +2,7 @@
  * Aura Climate Card – Raumklima, Schimmelrisiko & Lüftungsempfehlung für Home Assistant
  * MIT © muhkuh666 – https://github.com/muhkuh666/Aura-Climate-Card
  */
-const AURA_VERSION = "2.0.0";
+const AURA_VERSION = "2.1.0";
 
 /* ------------------------------------------------------------------ */
 /*  Texte                                                              */
@@ -66,6 +66,12 @@ const AURA_I18N = {
     wall_learned: "gelernt · {n} Messung|gelernt · {n} Messungen",
     wl_title: "Wandpunkt messen",
     th_title: "Thermostate",
+    mm_title: "Min / Max",
+    mm_24: "24 h",
+    mm_all: "Allzeit",
+    mm_out: "Außen",
+    mm_nostat: "keine Langzeitstatistik",
+    mm_since: "seit {d}",
     fc_best: "Beste Lüftungszeit heute: {f}–{t} Uhr · {ah} g/m³ (jetzt {n})",
     fc_now: "Jetzt ist die beste Lüftungszeit für heute ({ah} g/m³)",
     fc_cool: "Kühl lüften: {f}–{t} Uhr · {tmp} °C",
@@ -197,6 +203,12 @@ const AURA_I18N = {
     wall_learned: "learned · {n} measurement|learned · {n} measurements",
     wl_title: "Measure wall spot",
     th_title: "Thermostats",
+    mm_title: "Min / Max",
+    mm_24: "24 h",
+    mm_all: "All-time",
+    mm_out: "Outdoor",
+    mm_nostat: "no long-term statistics",
+    mm_since: "since {d}",
     fc_best: "Best time to ventilate today: {f}–{t} · {ah} g/m³ (now {n})",
     fc_now: "Now is the best time to ventilate today ({ah} g/m³)",
     fc_cool: "Ventilate to cool: {f}–{t} · {tmp} °C",
@@ -323,6 +335,9 @@ const AURA_DEFAULTS = {
   close_tolerance: 5,
   close_below: 15,
   heating_alarm: true,
+  show_minmax: true,
+  minmax_alltime: true,
+  minmax_outdoor: true,
   show_forecast: true,
   show_trends: true,
   show_heat_loss: true,
@@ -515,6 +530,8 @@ class AuraClimateCard extends HTMLElement {
     this._histAt = 0;
     this._week = null;
     this._weekAt = 0;
+    this._stats = null;
+    this._statsAt = 0;
     if (this._fcEntity !== this._config.weather) this._unsubForecast();
     if (this._hass) this._update();
   }
@@ -1091,7 +1108,7 @@ class AuraClimateCard extends HTMLElement {
     if (!list.length) return;
     this._histLoading = true;
     try {
-      const hours = Math.max(1, Math.min(168, Number(c.history_hours) || 24));
+      const hours = Math.max(c.show_minmax ? 24 : 1, Math.min(168, Number(c.history_hours) || 24));
       const start = new Date(Date.now() - hours * 3600e3).toISOString();
       const res = await this._hass.callApi(
         "GET",
@@ -1109,6 +1126,171 @@ class AuraClimateCard extends HTMLElement {
     } finally {
       this._histLoading = false;
     }
+  }
+
+  /* ---------- Min/Max ---------- */
+  _mmIds() {
+    const c = this._config;
+    const ids = new Set();
+    this._rooms.forEach((r) => [r.temperature, r.humidity, r.co2].forEach((i) => i && ids.add(i)));
+    if (c.minmax_outdoor) [c.outdoor_temperature, c.outdoor_humidity].forEach((i) => i && ids.add(i));
+    return [...ids].filter((i) => this._hass?.states?.[i]);
+  }
+  // Langzeitstatistik (bleibt dauerhaft, anders als die Historie): Monatswerte → Extremwerte
+  async _loadStats() {
+    const c = this._config;
+    if (!this._hass?.callWS || !c.show_minmax || !c.minmax_alltime || this._statsLoading) return;
+    if (Date.now() - (this._statsAt || 0) < 3 * 3600e3) return;
+    const ids = this._mmIds();
+    if (!ids.length) return;
+    this._statsLoading = true;
+    try {
+      const res = await this._hass.callWS({
+        type: "recorder/statistics_during_period",
+        start_time: "2000-01-01T00:00:00Z",
+        statistic_ids: ids,
+        period: "month",
+        types: ["min", "max"],
+      });
+      const out = {};
+      ids.forEach((id) => {
+        const rows = (res?.[id] || []).filter((r) => r.min != null || r.max != null);
+        if (!rows.length) return (out[id] = null);
+        let mn = null,
+          mx = null;
+        rows.forEach((r) => {
+          if (r.min != null && (!mn || r.min < mn.v)) mn = { v: r.min, start: r.start, end: r.end, exact: false };
+          if (r.max != null && (!mx || r.max > mx.v)) mx = { v: r.max, start: r.start, end: r.end, exact: false };
+        });
+        out[id] = { min: mn, max: mx, first: rows[0].start };
+      });
+      this._stats = out;
+      this._refined = {};
+      this._statsAt = Date.now();
+      this._sig = "";
+      this._update();
+    } catch (e) {
+      this._statsAt = Date.now();
+      this._stats = {};
+      console.warn("aura-climate-card: statistics", e);
+    } finally {
+      this._statsLoading = false;
+    }
+  }
+  // Datum des Extremwerts auf den Tag genau nachladen (nur für den angezeigten Raum)
+  async _refineStat(id, kind) {
+    const st = this._stats?.[id]?.[kind];
+    const key = id + "|" + kind;
+    if (!st || st.exact || this._refined?.[key]) return;
+    this._refined[key] = true;
+    try {
+      const toIso = (v) => (typeof v === "number" ? new Date(v).toISOString() : v);
+      const res = await this._hass.callWS({
+        type: "recorder/statistics_during_period",
+        start_time: toIso(st.start),
+        end_time: toIso(st.end),
+        statistic_ids: [id],
+        period: "day",
+        types: [kind],
+      });
+      let best = null;
+      (res?.[id] || []).forEach((r) => {
+        const v = r[kind];
+        if (v == null) return;
+        if (!best || (kind === "min" ? v < best.v : v > best.v)) best = { v, start: r.start };
+      });
+      if (best) {
+        st.v = best.v;
+        st.start = best.start;
+        st.exact = true;
+        this._sig = "";
+        this._update();
+      }
+    } catch (e) {
+      /* Monat reicht als Angabe */
+    }
+  }
+  // 24-h-Extremwerte aus dem Verlauf inkl. aktuellem Wert
+  _mm24(id) {
+    const s = this._hist?.map?.[id];
+    const cur = this._num(id);
+    const to = Date.now(),
+      from = to - 24 * 3600e3;
+    const pts = [];
+    if (s?.length) {
+      const first = this._at(s, from);
+      if (first != null && s[0].t <= from) pts.push({ t: from, v: first });
+      s.forEach((p) => p.t >= from && pts.push(p));
+    }
+    if (cur != null) pts.push({ t: to, v: cur });
+    if (!pts.length) return null;
+    let mn = pts[0],
+      mx = pts[0];
+    pts.forEach((p) => {
+      if (p.v < mn.v) mn = p;
+      if (p.v > mx.v) mx = p;
+    });
+    return { min: mn, max: mx, partial: !s?.length || s[0].t > from + 3600e3 };
+  }
+  _fmtTime(ts) {
+    return new Intl.DateTimeFormat(this._lang === "de" ? "de-DE" : "en-US", { hour: "2-digit", minute: "2-digit" }).format(new Date(ts));
+  }
+  _fmtDate(ts, exact) {
+    const d = new Date(typeof ts === "number" ? ts : Date.parse(ts));
+    const o = exact ? { day: "2-digit", month: "2-digit", year: "numeric" } : { month: "short", year: "numeric" };
+    return new Intl.DateTimeFormat(this._lang === "de" ? "de-DE" : "en-US", o).format(d);
+  }
+
+  _renderMinMax(a) {
+    const c = this._config;
+    const r = a.room;
+    const rows = [
+      [r.temperature, "temperature", "°C", this._dT, "thermo"],
+      [r.humidity, "humidity", "%", this._dH, "drop"],
+      [r.co2, "co2", "ppm", 0, "co2"],
+    ];
+    if (c.minmax_outdoor) {
+      rows.push([c.outdoor_temperature, "mm_out", "°C", this._dT, "home"]);
+      rows.push([c.outdoor_humidity, "mm_out", "%", this._dH, "home"]);
+    }
+    const allTime = c.minmax_alltime;
+    const cells = rows
+      .filter(([id]) => id && this._st(id))
+      .map(([id, lbl, unit, dec, ic]) => {
+        const d = this._mm24(id);
+        const st = allTime ? this._stats?.[id] : undefined;
+        if (st?.min) this._refineStat(id, "min");
+        if (st?.max) this._refineStat(id, "max");
+        // Allzeit = Statistik, ergänzt um die letzten 24 h (Statistik hinkt bis zu 1 h hinterher)
+        let amin = st?.min ? { v: st.min.v, d: this._fmtDate(st.min.start, st.min.exact) } : null;
+        let amax = st?.max ? { v: st.max.v, d: this._fmtDate(st.max.start, st.max.exact) } : null;
+        if (st && d) {
+          if (!amin || d.min.v < amin.v) amin = { v: d.min.v, d: this._fmtDate(d.min.t, true) };
+          if (!amax || d.max.v > amax.v) amax = { v: d.max.v, d: this._fmtDate(d.max.t, true) };
+        }
+        const v = (x, cls, sub) =>
+          `<button class="mmv ${cls}" data-entity="${esc(id)}"><b>${x != null ? this._n(x, dec) : "–"}</b>${sub ? `<small>${esc(sub)}</small>` : ""}</button>`;
+        return `<div class="mmrow">
+          <span class="mml">${icon(ic)}<span>${this._t(lbl)}<small>${unit}</small></span></span>
+          ${v(d?.min.v, "mn", d ? this._fmtTime(d.min.t) : "")}${v(d?.max.v, "mx", d ? this._fmtTime(d.max.t) : "")}
+          ${
+            allTime
+              ? st === null
+                ? `<span class="mmna">${this._t("mm_nostat")}</span>`
+                : `${v(amin?.v, "mn", amin?.d)}${v(amax?.v, "mx", amax?.d)}`
+              : ""
+          }
+        </div>`;
+      });
+    if (!cells.length) return "";
+    const firsts = Object.values(this._stats || {}).filter((x) => x?.first).map((x) => (typeof x.first === "number" ? x.first : Date.parse(x.first)));
+    const since = allTime && firsts.length ? this._t("mm_since", { d: this._fmtDate(Math.min(...firsts), false) }) : "";
+    return `<div class="mm2 ${allTime ? "" : "short"}">
+      <div class="mmhead"><span class="mmt">${icon("target")}${this._t("mm_title")}</span>
+        <span class="mmh">${this._t("mm_24")}</span>${allTime ? `<span class="mmh">${this._t("mm_all")}${since ? `<small>${since}</small>` : ""}</span>` : ""}</div>
+      <div class="mmsub"><span></span><span>min</span><span>max</span>${allTime ? "<span>min</span><span>max</span>" : ""}</div>
+      ${cells.join("")}
+    </div>`;
   }
 
   _parseHistory(res) {
@@ -1361,12 +1543,13 @@ class AuraClimateCard extends HTMLElement {
         const s = this._st(i);
         return s ? s.state + "|" + (s.attributes?.temperature ?? "") + "|" + (s.attributes?.hvac_action ?? "") + "|" + s.last_changed : "";
       })
-      .join(";") + `#${(this._fc || []).length}#${this._weekAt}#${this._histAt}#${this._sel}#${this._detail}#${this._lang}#${this._wallPanel}#${this._climPanel}#${this._wallMsg?.text || ""}`;
+      .join(";") + `#${(this._fc || []).length}#${this._weekAt}#${this._statsAt}#${Object.values(this._stats || {}).filter((x) => x?.min?.exact || x?.max?.exact).length}#${this._histAt}#${this._sel}#${this._detail}#${this._lang}#${this._wallPanel}#${this._climPanel}#${this._wallMsg?.text || ""}`;
     if (sig === this._sig) return;
     this._sig = sig;
     this._render();
     this._loadHistory();
     this._loadWeek();
+    this._loadStats();
     this._subscribeForecast();
   }
 
@@ -1668,6 +1851,7 @@ class AuraClimateCard extends HTMLElement {
     if (a.climates.length > 1 && this._climPanel === this._all.indexOf(a)) sections.push(this._renderClimPanel(a));
     if (c.show_ventilation) sections.push(this._renderVent(a));
     if (c.show_mold) sections.push(this._renderMold(a));
+    if (c.show_minmax) sections.push(this._renderMinMax(a));
     const charts = [];
     if (c.show_comfort_chart) charts.push(this._renderComfort(a, all));
     if (c.show_history) charts.push(this._renderHistory(a));
@@ -1861,8 +2045,9 @@ hy = [10, 90];
 
   _renderHistory(a) {
     const col = this._col;
-    const hours = this._config.history_hours;
-    const h = this._hist;
+    const hours = Math.max(1, Math.min(168, Number(this._config.history_hours) || 24));
+    const h0 = this._hist;
+    const h = h0 ? { ...h0, hours, from: Math.max(h0.from, h0.to - hours * 3600e3) } : null;
     const head = `<div class="ch">${this._t("history", { h: hours })}
       <span class="lg">${this._config.show_history_temp ? `<i style="background:${col.temp}"></i>°C ` : ""}${this._config.show_history_hum ? `<i style="background:${col.hum}"></i>%` : ""}</span></div>`;
     const T = h?.map[a.room.temperature],
@@ -2151,6 +2336,24 @@ hy = [10, 90];
     .mwb{height:8px;border-radius:9px;background:var(--soft2);overflow:hidden}
     .mwb i{display:block;height:100%;background:var(--c);border-radius:9px}
     .mwh{text-align:right;font-weight:600}
+    .mm2{margin-top:12px;padding:12px 14px;border-radius:16px;background:var(--soft)}
+    .mmhead,.mmsub,.mmrow{display:grid;grid-template-columns:minmax(90px,1.2fr) repeat(4,minmax(0,1fr));gap:6px;align-items:center}
+    .mmhead{align-items:end}
+    .mm2.short .mmhead,.mm2.short .mmsub,.mm2.short .mmrow{grid-template-columns:minmax(90px,1.2fr) repeat(2,minmax(0,1fr))}
+    .mmhead .mmt{display:flex;align-items:center;gap:6px;font-weight:600}
+    .mmhead .mmh{grid-column:span 2;text-align:center;font-size:.78em;font-weight:600;color:var(--secondary-text-color);border-bottom:1px solid var(--soft2);padding-bottom:3px}
+    .mmh small{display:block;font-weight:400;font-size:.9em}
+    .mmsub{font-size:.68em;color:var(--secondary-text-color);text-align:center;margin:2px 0 4px}
+    .mmrow{padding:5px 0;border-top:1px solid var(--soft2)}
+    .mml{display:flex;align-items:center;gap:6px;font-size:.82em;min-width:0}
+    .mml span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .mml small{margin-left:3px;color:var(--secondary-text-color)}
+    .mml .ic{width:16px;height:16px;color:var(--secondary-text-color);flex:none}
+    .mmv{display:flex;flex-direction:column;align-items:center;line-height:1.15;min-width:0}
+    .mmv b{font-size:.92em}.mmv.mn b{color:var(--info)}.mmv.mx b{color:var(--temp)}
+    .mmv small{font-size:.64em;color:var(--secondary-text-color);white-space:nowrap}
+    .mmna{grid-column:span 2;text-align:center;font-size:.7em;color:var(--secondary-text-color)}
+    @container (max-width:400px){.mmhead,.mmsub,.mmrow{grid-template-columns:minmax(70px,1fr) repeat(4,minmax(0,1fr));gap:3px}.mml small{display:none}}
     .cond{display:flex;align-items:center;gap:6px;margin-top:8px;color:var(--alarm);font-weight:600;font-size:.88em}
     .charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin-top:12px}
     .chart{padding:10px 12px 6px;border-radius:16px;background:var(--soft)}
@@ -2182,6 +2385,9 @@ hy = [10, 90];
 const ED_I18N = {
   de: {
     title: "Titel",
+    show_minmax: "Min/Max-Werte",
+    minmax_alltime: "Min/Max Allzeit (Langzeitstatistik)",
+    minmax_outdoor: "Min/Max auch außen",
     g_forecast: "Wettervorhersage (beste Lüftungszeit)",
     weather: "Wetter-Entität (stündliche Vorhersage)",
     show_forecast: "Beste Lüftungszeit anzeigen",
@@ -2324,6 +2530,9 @@ const ED_I18N = {
   },
   en: {
     title: "Title",
+    show_minmax: "Min/max values",
+    minmax_alltime: "All-time min/max (long-term statistics)",
+    minmax_outdoor: "Min/max for outdoor too",
     g_forecast: "Weather forecast (best time to ventilate)",
     weather: "Weather entity (hourly forecast)",
     show_forecast: "Show best time to ventilate",
@@ -2555,7 +2764,7 @@ class AuraClimateCardEditor extends HTMLElement {
         bools(["show_air_quality", "show_dewpoint", "show_abs_humidity", "show_wall", "show_co2", "show_voc", "show_pm", "show_window", "show_target", "show_mold_sensor", "show_devices"]),
       ]),
       sec("g_details", l.g_details, "mdi:chart-bell-curve", [
-        bools(["show_trends", "show_mold_week", "show_reasons", "show_ah_compare", "show_mold_hours", "show_history_temp", "show_history_hum", "show_comfort_others", "show_outdoor_in_chart"]),
+        bools(["show_minmax", "minmax_alltime", "minmax_outdoor", "show_trends", "show_mold_week", "show_reasons", "show_ah_compare", "show_mold_hours", "show_history_temp", "show_history_hum", "show_comfort_others", "show_outdoor_in_chart"]),
         { type: "grid", name: "", schema: [num("history_hours", 1, 168, 1), num("chart_temp_min", 0, 30, 1), num("chart_temp_max", 15, 45, 1)] },
       ]),
       sec("g_limits", l.limits, "mdi:tune-variant", [

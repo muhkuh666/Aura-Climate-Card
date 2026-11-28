@@ -30,6 +30,7 @@
 - **Heat loss of open windows** in kWh and € (today and current opening).
 - **Cellar mode (dew point ventilation):** ventilate only when the outdoor air dries the cellar and won't condense on cold walls.
 - **Trend arrows** for temperature, humidity and CO₂ (last 30 min) – rapidly rising humidity (shower, cooking) triggers ventilation advice.
+- **Min / max values** for temperature, humidity, CO₂ (and outdoor): last 24 h with time and **all-time** with date – from Home Assistant's long-term statistics, which are kept forever (sensors need a `state_class`).
 - **Weekly mold balance:** mold hours of every room over the last 7 days, worst room first.
 - **Dehumidifier / humidifier** per room with recommendation and on/off button right in the card.
 - **Notification blueprint** for your phone (see below).
@@ -117,6 +118,7 @@ Everything below can also be set in the **visual editor** (sections: Outdoor sen
 | **Forecast & extras** | | |
 | `weather` | – | Weather entity with hourly forecast (for the best time to ventilate) |
 | `show_forecast`, `show_trends`, `show_mold_week`, `show_devices` | `true` | Best time, trend arrows, weekly mold balance, de-/humidifier tiles |
+| `show_minmax` / `minmax_alltime` / `minmax_outdoor` | `true` | Min/max section: 24 h, all-time (long-term statistics), outdoor rows |
 | `show_vent_timer` | `true` | Start/stop countdown for rooms without window sensor |
 | `show_heat_loss` / `heat_price` / `currency` | `true` / `0.12` / `€` | Heat loss of open windows |
 | **Number format** | | |
@@ -175,6 +177,7 @@ The tile then shows *learned · n measurements* and the mold risk uses your real
 - **Heizverlust offener Fenster** in kWh und € (heute und aktuelle Öffnung).
 - **Kellermodus (Taupunktlüftung):** nur lüften, wenn die Außenluft den Keller trocknet und an kalten Wänden nicht kondensiert.
 - **Trendpfeile** für Temperatur, Luftfeuchte und CO₂ (letzte 30 min) – schnell steigende Feuchte (Duschen, Kochen) löst die Lüftungsempfehlung aus.
+- **Min-/Max-Werte** für Temperatur, Luftfeuchte, CO₂ (und außen): letzte 24 h mit Uhrzeit und **Allzeit** mit Datum – aus der Langzeitstatistik von Home Assistant, die dauerhaft gespeichert bleibt (Sensoren brauchen eine `state_class`).
 - **Schimmel-Wochenbilanz:** Schimmelstunden aller Räume der letzten 7 Tage, schlechtester Raum oben.
 - **Ent-/Befeuchter** pro Raum mit Empfehlung und An/Aus-Knopf direkt in der Karte.
 - **Benachrichtigungs-Blueprint** fürs Handy (siehe unten).

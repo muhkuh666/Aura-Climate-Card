@@ -32,10 +32,34 @@ const states = Object.fromEntries([
   S("sensor.kz_temp", 21.9), S("sensor.kz_hum", 55), S("sensor.kz_co2", 1320),
 ]);
 const base = { "sensor.aussen_temperatur": [3.5, 2.5], "sensor.wz_temp": [21.4, .8], "sensor.wz_hum": [52, 4], "sensor.sz_temp": [17.6, 1.2], "sensor.sz_hum": [69, 6],
-  "sensor.bad_temp": [22.3, 1], "sensor.bad_hum": [76, 12], "sensor.ku_temp": [20.8, 1], "sensor.ku_hum": [47, 5], "sensor.kz_temp": [21.9, .7], "sensor.keller_temp": [13.5, .3], "sensor.keller_hum": [74, 2], "sensor.wz_co2": [700, 150], "sensor.kz_hum": [55, 4] };
+  "sensor.bad_temp": [22.3, 1], "sensor.bad_hum": [76, 12], "sensor.ku_temp": [20.8, 1], "sensor.ku_hum": [47, 5], "sensor.kz_temp": [21.9, .7], "sensor.keller_temp": [13.5, .3], "sensor.keller_hum": [74, 2], "sensor.wz_co2": [700, 150], "sensor.kz_co2": [1100, 200], "sensor.kz_hum": [55, 4] };
 const fc = []; for (let i = 0; i < 24; i++) { const t = new Date(now + i * 3600e3); t.setMinutes(0, 0, 0); const hr = t.getHours();
   fc.push({ datetime: t.toISOString(), temperature: 2 + 4 * Math.sin((hr - 9) / 24 * 2 * Math.PI), humidity: 92 - 22 * Math.sin((hr - 9) / 24 * 2 * Math.PI), precipitation_probability: hr === 11 ? 80 : 10 }); }
 const hass = {
+  callWS: async (msg) => { window.__mstat = window.__mstat || {};
+    if (msg.type !== "recorder/statistics_during_period") return {};
+    const out = {};
+    msg.statistic_ids.forEach((id) => {
+      const [b, a] = base[id] || [20, 1];
+      if (id === "sensor.kz_co2") return (out[id] = []); // ohne state_class → keine Statistik
+      const rows = [];
+      if (msg.period === "month") {
+        for (let m = 0; m < 26; m++) { const d = new Date(2024, 9 + m, 1); const e = new Date(2024, 10 + m, 1);
+          const season = Math.cos((d.getMonth() - 6.5) / 12 * 2 * Math.PI);
+          const sp = id.includes("aussen_temp") ? 14 : id.includes("aussen") ? 30 : id.includes("hum") ? 9 : id.includes("co2") ? 500 : 2.5;
+          const cl = (v) => id.includes("hum") || id.includes("feuchte") ? Math.max(15, Math.min(100, v)) : v;
+          rows.push({ start: d.getTime(), end: e.getTime(), min: cl(b - sp * (1.2 + .3 * Math.max(0, season)) - (m === 15 ? 1.1 : 0)), max: cl(b + sp * (1 + .5 * Math.max(0, -season)) + (m === 21 ? .9 : 0)) }); }
+      } else {
+        // Tagesauflösung: Extremwert des Monats liegt am 14. (min) bzw. 18. (max)
+        const st = new Date(msg.start_time).getTime(), en = new Date(msg.end_time).getTime();
+        const mrow = (window.__mstat[id] || []).find((r) => r.start === st) || { min: b, max: b };
+        for (let t = st, i = 0; t < en; t += 864e5, i++) rows.push({ start: t, end: t + 864e5, min: i === 13 ? mrow.min : mrow.min + 1 + (i % 3), max: i === 17 ? mrow.max : mrow.max - 1 - (i % 3) });
+      }
+      if (msg.period === "month") (window.__mstat = window.__mstat || {})[id] = rows;
+      out[id] = rows;
+    });
+    return out;
+  },
   connection: { subscribeMessage: async (cb, msg) => { setTimeout(() => cb({ forecast: fc }), 50); return () => {}; } },
   callService: async (d, sv, data) => { console.log("SERVICE " + d + "." + sv + " " + JSON.stringify(data)); },
   language: "de", locale: { language: "de" }, states,
