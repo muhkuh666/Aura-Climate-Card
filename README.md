@@ -24,6 +24,7 @@
 - **Ventilation advice with reasons:** compares absolute humidity indoors and outdoors – it tells you when ventilating actually helps and when the outdoor air is too humid. Includes burst-ventilation duration by outdoor temperature and the expected humidity afterwards.
 - **Air quality score (0–100)** per room from CO₂, VOC, PM2.5 and PM10 – the worst value counts and is named ("particulates PM2.5").
 - **CO₂ estimate without a sensor:** calculated from room volume, persons (fixed or via presence sensor), window state and air change rate (mass balance). Clearly marked as *estimated*. A room is only estimated if it has a presence sensor or a number of `persons` – without a presence sensor those persons are assumed to be present all the time.
+- **Several windows and outside doors per room** (terrace, balcony): the tile shows "1 of 3 open", tap for the list; timer, heat loss and CO₂ estimate use all openings.
 - **Several thermostats per room:** the target tile shows the range (e.g. 21.5–22.0 °C) and how many are heating; tap it for the list of all thermostats.
 - **Best time to ventilate today** from your weather forecast (hourly): driest outdoor air in the heating season, coolest hours in summer – plus "better ventilate at 14–16" when ventilating now won't help.
 - **Ventilation countdown:** automatic while a window sensor reports "open", manual start/stop button for rooms without window sensor; "time is up – close the window".
@@ -64,6 +65,10 @@ rooms:
     temperature: sensor.living_temperature
     humidity: sensor.living_humidity
     co2: sensor.living_co2
+    window:                   # several windows …
+      - binary_sensor.living_window_left
+      - binary_sensor.living_window_right
+    door: binary_sensor.terrace_door   # … and outside doors
     climate:                  # several thermostats per room
       - climate.living_room_window
       - climate.living_room_sofa
@@ -126,7 +131,7 @@ Everything below can also be set in the **visual editor** (sections: Outdoor sen
 | **Colors** | | |
 | `color_temperature`, `color_humidity`, `color_ok`, `color_warn`, `color_alarm`, `color_info` | – | Hex or `[r,g,b]` |
 
-**Room options:** `name`, `icon`, `temperature`*, `humidity`*, `window`, `co2`, `wall_temperature`, `wall_learn`, `mold`, `climate` (one or a list of thermostats), `target_temperature`, `room_type` (`normal` / `cellar`), `dehumidifier`, `humidifier` (* required) – plus **own thresholds per room**: `temp_min`, `temp_max`, `hum_min`, `hum_max`, `mold_warn`, `mold_alarm`, `co2_warn`, `co2_alarm`, `frsi`, `vent_threshold`, `aq_warn`, `aq_alarm` – plus **air quality**: `voc`, `pm25`, `pm10`, `presence` (binary_sensor = present/absent, sensor/input_number = number of persons), `volume` (m³), `persons`, `ach`
+**Room options:** `name`, `icon`, `temperature`*, `humidity`*, `window` (one or a list), `door` (outside doors, one or a list), `co2`, `wall_temperature`, `wall_learn`, `mold`, `climate` (one or a list of thermostats), `target_temperature`, `room_type` (`normal` / `cellar`), `dehumidifier`, `humidifier` (* required) – plus **own thresholds per room**: `temp_min`, `temp_max`, `hum_min`, `hum_max`, `mold_warn`, `mold_alarm`, `co2_warn`, `co2_alarm`, `frsi`, `vent_threshold`, `aq_warn`, `aq_alarm` – plus **air quality**: `voc`, `pm25`, `pm10`, `presence` (binary_sensor = present/absent, sensor/input_number = number of persons), `volume` (m³), `persons`, `ach`
 
 ```yaml
   - name: Bathroom          # bathroom may be more humid
@@ -171,6 +176,7 @@ The tile then shows *learned · n measurements* and the mold risk uses your real
 - **Lüftungsempfehlung mit Begründung:** vergleicht die absolute Feuchte innen und außen – sagt dir, wann Lüften wirklich hilft und wann die Außenluft zu feucht ist. Mit Stoßlüft-Dauer je nach Außentemperatur und erwarteter Feuchte nach dem Lüften.
 - **Luftqualitäts-Score (0–100)** pro Raum aus CO₂, VOC, PM2.5 und PM10 – der schlechteste Wert zählt und wird genannt („Feinstaub PM2.5“).
 - **CO₂-Schätzung ohne Sensor:** berechnet aus Raumvolumen, Personen (fest oder per Anwesenheitssensor), Fensterzustand und Luftwechsel (Massenbilanz). Deutlich als *geschätzt* markiert. Geschätzt wird nur, wenn der Raum einen Anwesenheitssensor oder eine Personenzahl hat – ohne Anwesenheitssensor gelten diese Personen als dauerhaft anwesend.
+- **Mehrere Fenster und Außentüren pro Raum** (Terrasse, Balkon): Die Kachel zeigt „1 von 3 offen“, Tipp öffnet die Liste; Timer, Heizverlust und CO₂-Schätzung berücksichtigen alle Öffnungen.
 - **Mehrere Thermostate pro Raum:** Die Soll-Kachel zeigt den Bereich (z. B. 21,5–22,0 °C) und wie viele gerade heizen; Tipp darauf zeigt alle Thermostate einzeln.
 - **Beste Lüftungszeit heute** aus deiner Wettervorhersage (stündlich): trockenste Außenluft in der Heizperiode, kühlste Stunden im Sommer – plus „besser 14–16 Uhr lüften“, wenn Lüften jetzt nichts bringt.
 - **Lüft-Countdown:** automatisch, solange der Fenstersensor „offen“ meldet; Start/Stopp-Knopf für Räume ohne Fenstersensor; „Lüftzeit vorbei – Fenster schließen“.

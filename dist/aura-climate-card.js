@@ -2,7 +2,7 @@
  * Aura Climate Card – Raumklima, Schimmelrisiko & Lüftungsempfehlung für Home Assistant
  * MIT © muhkuh666 – https://github.com/muhkuh666/Aura-Climate-Card
  */
-const AURA_VERSION = "2.1.0";
+const AURA_VERSION = "2.2.0";
 
 /* ------------------------------------------------------------------ */
 /*  Texte                                                              */
@@ -66,6 +66,13 @@ const AURA_I18N = {
     wall_learned: "gelernt · {n} Messung|gelernt · {n} Messungen",
     wl_title: "Wandpunkt messen",
     th_title: "Thermostate",
+    door: "Tür",
+    v_door_open: "Tür offen",
+    op_windows: "Fenster",
+    op_doors: "Türen",
+    op_both: "Fenster & Türen",
+    op_open_of: "{n} von {m} offen",
+    op_all_closed: "alle zu",
     mm_title: "Min / Max",
     mm_24: "24 h",
     mm_all: "Allzeit",
@@ -203,6 +210,13 @@ const AURA_I18N = {
     wall_learned: "learned · {n} measurement|learned · {n} measurements",
     wl_title: "Measure wall spot",
     th_title: "Thermostats",
+    door: "Door",
+    v_door_open: "Door open",
+    op_windows: "Windows",
+    op_doors: "Doors",
+    op_both: "Windows & doors",
+    op_open_of: "{n} of {m} open",
+    op_all_closed: "all closed",
     mm_title: "Min / Max",
     mm_24: "24 h",
     mm_all: "All-time",
@@ -466,6 +480,8 @@ const ICONS = {
   flame: '<path d="M12 3c1 3.5 5 5.5 5 10a5 5 0 0 1-10 0c0-2.5 1.3-4 2.5-5 .3 1.8 1.2 2.8 2.2 3.2C11 8.5 11 6 12 3z"/>',
   home: '<path d="M4 11 12 4l8 7v9H4z"/><path d="M10 20v-5h4v5"/>',
   back: '<path d="M15 5l-7 7 7 7"/>',
+  door: '<path d="M6 21V3.5h12V21"/><path d="M4 21h16"/><circle cx="14.5" cy="12" r=".9"/>',
+  doorOpen: '<path d="M6 21V3.5h12V21"/><path d="M4 21h16"/><path d="M6 3.5l7 2.5v16l-7-1z"/>',
   clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
   play: '<path d="M8 5.5v13l10-6.5z"/>',
   stop: '<rect x="7" y="7" width="10" height="10" rx="1.5"/>',
@@ -595,6 +611,26 @@ class AuraClimateCard extends HTMLElement {
     if (!s) return null;
     const v = parseFloat(s.state);
     return isFinite(v) ? v : null;
+  }
+
+  /* Fenster & Außentüren eines Raums (je eins oder mehrere) */
+  _openings(room) {
+    const isOpen = (st) => ["on", "open", "opening", "tilted", "true"].includes(String(st).toLowerCase());
+    const list = [
+      ...toList(room?.window).map((id) => [id, "window"]),
+      ...toList(room?.door).map((id) => [id, "door"]),
+    ]
+      .map(([id, kind]) => {
+        const st = this._st(id);
+        if (!st) return null;
+        const since = new Date(st.last_changed).getTime();
+        return { id, kind, name: st.attributes?.friendly_name || id, open: isOpen(st.state), since };
+      })
+      .filter(Boolean);
+    const open = list.filter((o) => o.open);
+    // offen: seit dem ersten Öffnen; zu: seit dem letzten Schließen
+    const since = open.length ? Math.min(...open.map((o) => o.since)) : list.length ? Math.max(...list.map((o) => o.since)) : null;
+    return { list, open, anyOpen: open.length > 0, since, isOpen };
   }
 
   _cfgFor(room) {
@@ -767,9 +803,9 @@ class AuraClimateCard extends HTMLElement {
     if (!(pNow >= 0)) return null;
     if (!ps && !(baseP > 0)) return null; // 0 Personen ohne Anwesenheitssensor → keine Schätzung
 
-    const ws = this._st(room.window);
-    const wOpenNow = !!ws && ["on", "open", "opening", "tilted", "true"].includes(String(ws.state).toLowerCase());
-    const wChange = ws ? new Date(ws.last_changed).getTime() : null;
+    const op = this._openings(room);
+    const wOpenNow = op.anyOpen;
+    const wChange = op.list.length ? op.since : null;
 
     // Zeitpunkte sammeln (max. 24 h zurück)
     const events = [];
@@ -862,10 +898,10 @@ class AuraClimateCard extends HTMLElement {
     a.target = tg.length ? tg.reduce((x, y) => x + y, 0) / tg.length : room.target_temperature != null ? Number(room.target_temperature) : null;
     a.heatingCount = a.climates.filter((x) => x.heating).length;
     a.heating = a.heatingCount > 0;
-    const w = this._st(room.window);
-    a.hasWindow = !!w;
-    a.windowOpen = !!w && ["on", "open", "opening", "tilted", "true"].includes(String(w.state).toLowerCase());
-    a.openMin = a.windowOpen ? Math.max(0, Math.round((Date.now() - new Date(w.last_changed).getTime()) / 60000)) : 0;
+    a.openings = this._openings(room);
+    a.hasWindow = a.openings.list.length > 0;
+    a.windowOpen = a.openings.anyOpen;
+    a.openMin = a.windowOpen ? Math.max(0, Math.round((Date.now() - a.openings.since) / 60000)) : 0;
 
     if (!a.valid) return a;
 
@@ -1103,7 +1139,7 @@ class AuraClimateCard extends HTMLElement {
     if (!this._hass || (!c.show_history && !c.show_mold && !c.show_trends && !c.show_heat_loss)) return;
     if (this._histLoading || Date.now() - this._histAt < 10 * 60 * 1000) return;
     const ids = new Set([c.outdoor_temperature]);
-    this._rooms.forEach((r) => [r.temperature, r.humidity, r.wall_temperature, r.co2, r.window].forEach((i) => ids.add(i)));
+    this._rooms.forEach((r) => [r.temperature, r.humidity, r.wall_temperature, r.co2, ...toList(r.window), ...toList(r.door)].forEach((i) => ids.add(i)));
     const list = [...ids].filter((i) => i && this._hass.states[i]);
     if (!list.length) return;
     this._histLoading = true;
@@ -1480,19 +1516,22 @@ class AuraClimateCard extends HTMLElement {
     const now = Date.now();
     const midnight = new Date();
     midnight.setHours(0, 0, 0, 0);
-    const isOpen = (st) => ["on", "open", "opening", "tilted", "true"].includes(String(st).toLowerCase());
-    let todayH = 0;
-    const raw = this._hist?.raw?.[a.room.window];
-    if (raw?.length) {
+    const isOpen = a.openings.isOpen;
+    // Öffnungsstunden aller Fenster/Türen addieren (jede Öffnung tauscht Luft aus)
+    let todayH = 0,
+      curH = 0;
+    a.openings.list.forEach((o) => {
+      const cur = o.open ? (now - o.since) / 3600e3 : 0;
+      curH += cur;
+      const raw = this._hist?.raw?.[o.id];
+      if (!raw?.length) return (todayH += o.open ? Math.min(cur, (now - midnight.getTime()) / 3600e3) : 0);
       for (let i = 0; i < raw.length; i++) {
         if (!isOpen(raw[i].s)) continue;
         const from = Math.max(raw[i].t, midnight.getTime());
         const to = i + 1 < raw.length ? raw[i + 1].t : now;
         if (to > from) todayH += (to - from) / 3600e3;
       }
-    }
-    const curH = a.windowOpen ? a.openMin / 60 : 0;
-    if (!raw?.length) todayH = curH;
+    });
     const fmt = (kwh) => ({ k: this._n(kwh, kwh < 1 ? 2 : 1), c: `${this._n(kwh * Number(c.heat_price || 0), 2)} ${c.currency || "€"}` });
     return { now: fmt(kw * curH), today: fmt(kw * todayH), todayKwh: kw * todayH, nowKwh: kw * curH };
   }
@@ -1537,13 +1576,13 @@ class AuraClimateCard extends HTMLElement {
     const c = this._config;
     const ids = [c.outdoor_temperature, c.outdoor_humidity];
     if (this._config.weather) ids.push(this._config.weather);
-    this._rooms.forEach((r) => ids.push(r.temperature, r.humidity, r.window, r.co2, r.wall_temperature, r.mold, ...toList(r.climate), r.voc, r.pm25, r.pm10, r.presence, r.wall_learn, r.dehumidifier, r.humidifier));
+    this._rooms.forEach((r) => ids.push(r.temperature, r.humidity, ...toList(r.window), ...toList(r.door), r.co2, r.wall_temperature, r.mold, ...toList(r.climate), r.voc, r.pm25, r.pm10, r.presence, r.wall_learn, r.dehumidifier, r.humidifier));
     const sig = ids
       .map((i) => {
         const s = this._st(i);
         return s ? s.state + "|" + (s.attributes?.temperature ?? "") + "|" + (s.attributes?.hvac_action ?? "") + "|" + s.last_changed : "";
       })
-      .join(";") + `#${(this._fc || []).length}#${this._weekAt}#${this._statsAt}#${Object.values(this._stats || {}).filter((x) => x?.min?.exact || x?.max?.exact).length}#${this._histAt}#${this._sel}#${this._detail}#${this._lang}#${this._wallPanel}#${this._climPanel}#${this._wallMsg?.text || ""}`;
+      .join(";") + `#${(this._fc || []).length}#${this._weekAt}#${this._statsAt}#${Object.values(this._stats || {}).filter((x) => x?.min?.exact || x?.max?.exact).length}#${this._histAt}#${this._sel}#${this._detail}#${this._lang}#${this._wallPanel}#${this._climPanel}#${this._openPanel}#${this._wallMsg?.text || ""}`;
     if (sig === this._sig) return;
     this._sig = sig;
     this._render();
@@ -1772,7 +1811,7 @@ class AuraClimateCard extends HTMLElement {
         label: this._t("aq"),
         val: `${a.aq} · ${this._t("aq_" + AQ.label(a.aq))}`,
         sub: a.aqOnlyEst ? this._t("est") : a.aqLevel !== "ok" ? this._t("w_" + a.aqWorst) : "",
-        ent: r.co2 || r.pm25 || r.voc || r.pm10 || r.presence || r.window,
+        ent: r.co2 || r.pm25 || r.voc || r.pm10 || r.presence || "",
         cls: "lv-" + a.aqLevel + " aqtile",
       });
     if (a.co2 != null) {
@@ -1783,7 +1822,7 @@ class AuraClimateCard extends HTMLElement {
         label: this._t("co2"),
         val: `${a.co2Est ? "~" : ""}${this._n(a.co2, 0)} ppm${this._arrow(a.trC, "ppm", 0)}`,
         sub: a.co2Est ? `${this._t("est")} · ${this._t("persons", { n: this._n(a.persons, 0) })}` : "",
-        ent: r.co2 || r.presence || r.window,
+        ent: r.co2 || r.presence || "",
         cls: lv ? "lv-" + lv : "",
       });
     }
@@ -1800,16 +1839,29 @@ class AuraClimateCard extends HTMLElement {
       const sv = AQ.pm10(a.pm10);
       tiles.push({ k: "show_pm", ic: "dust", label: this._t("pm10"), val: `${this._n(a.pm10, 0)} µg/m³`, ent: r.pm10, cls: sv < 40 ? "lv-alarm" : sv < 60 ? "lv-warn" : "" });
     }
-    if (a.hasWindow)
+    if (a.hasWindow) {
+      const L = a.openings.list;
+      const multi = L.length > 1;
+      const onlyDoors = L.every((o) => o.kind === "door");
+      const label = multi ? (L.some((o) => o.kind === "door") && !onlyDoors ? this._t("op_both") : this._t(onlyDoors ? "op_doors" : "op_windows")) : this._t(onlyDoors ? "door" : "window");
+      const loss = a.loss ? (a.windowOpen ? (a.loss.nowKwh >= 0.01 ? this._t("hl_open", a.loss.now) : "") : a.loss.todayKwh >= 0.01 ? this._t("hl_today", a.loss.today) : "") : "";
       tiles.push({
         k: "show_window",
-        ic: a.windowOpen ? "windowOpen" : "window",
-        label: this._t("window"),
-        val: a.windowOpen ? `${this._t("open")} · ${a.openMin} min` : this._t("closed"),
-        sub: a.loss ? (a.windowOpen ? (a.loss.nowKwh >= 0.01 ? this._t("hl_open", a.loss.now) : "") : a.loss.todayKwh >= 0.01 ? this._t("hl_today", a.loss.today) : "") : "",
-        ent: r.window,
+        ic: onlyDoors ? (a.windowOpen ? "doorOpen" : "door") : a.windowOpen ? "windowOpen" : "window",
+        label,
+        val: multi
+          ? a.windowOpen
+            ? `${this._t("op_open_of", { n: a.openings.open.length, m: L.length })} · ${a.openMin} min`
+            : this._t("op_all_closed")
+          : a.windowOpen
+          ? `${this._t("open")} · ${a.openMin} min`
+          : this._t("closed"),
+        sub: loss,
+        ent: multi ? "" : L[0].id,
+        attr: multi ? ` data-open="${this._all.indexOf(a)}"` : "",
         cls: a.windowOpen ? "lv-info" : "",
       });
+    }
     [
       [a.dehum, "dev_dehum", "dehum"],
       [a.hum, "dev_hum", "drop"],
@@ -1849,6 +1901,7 @@ class AuraClimateCard extends HTMLElement {
     const sections = [];
     if (r.wall_learn && this._wallPanel === this._all.indexOf(a)) sections.push(this._renderWallPanel(a));
     if (a.climates.length > 1 && this._climPanel === this._all.indexOf(a)) sections.push(this._renderClimPanel(a));
+    if (a.openings.list.length > 1 && this._openPanel === this._all.indexOf(a)) sections.push(this._renderOpenPanel(a));
     if (c.show_ventilation) sections.push(this._renderVent(a));
     if (c.show_mold) sections.push(this._renderMold(a));
     if (c.show_minmax) sections.push(this._renderMinMax(a));
@@ -1904,6 +1957,22 @@ class AuraClimateCard extends HTMLElement {
     </div>`;
   }
 
+  _renderOpenPanel(a) {
+    const L = a.openings.list.slice().sort((x, y) => Number(y.open) - Number(x.open) || x.name.localeCompare(y.name));
+    return `<div class="wpanel cpanel">
+      <div class="wph">${icon("window")}<b>${this._t("op_both")}</b><button class="wx" data-oclose="1" aria-label="${this._t("wl_close")}">✕</button></div>
+      <div class="clist">${L.map((o) => {
+        const ic = o.kind === "door" ? (o.open ? "doorOpen" : "door") : o.open ? "windowOpen" : "window";
+        const min = Math.max(0, Math.round((Date.now() - o.since) / 60000));
+        const dur = min < 120 ? `${min} min` : min < 2880 ? `${Math.round(min / 60)} h` : `${Math.round(min / 1440)} d`;
+        return `<button class="crow ${o.open ? "heat open" : ""}" data-entity="${esc(o.id)}">
+            ${icon(ic)}<span class="cn">${esc(o.name)}</span>
+            <span class="cv"><b>${this._t(o.open ? "open" : "closed")}</b> · ${dur}</span>
+          </button>`;
+      }).join("")}</div>
+    </div>`;
+  }
+
   _renderClimPanel(a) {
     return `<div class="wpanel cpanel">
       <div class="wph">${icon("target")}<b>${this._t("th_title")}</b><button class="wx" data-cclose="1" aria-label="${this._t("wl_close")}">✕</button></div>
@@ -1945,7 +2014,7 @@ class AuraClimateCard extends HTMLElement {
     return `<div class="vent lv-${a.vLevel}">
       <div class="vic">${icon(ic)}</div>
       <div class="vtx">
-        <div class="vh">${this._t(a.vKey)}${a.showDuration ? `<span class="vdur">${this._t("dur", { m: a.duration })}</span>` : ""}</div>
+        <div class="vh">${this._t(a.vKey === "v_open" && a.openings?.open.length && a.openings.open.every((o) => o.kind === "door") ? "v_door_open" : a.vKey)}${a.showDuration ? `<span class="vdur">${this._t("dur", { m: a.duration })}</span>` : ""}</div>
         ${a.reasons.length && this._config.show_reasons ? `<ul>${a.reasons.map((r) => `<li>${esc(r)}</li>`).join("")}</ul>` : ""}
         ${this._renderTimer(a)}
       </div>
@@ -2163,6 +2232,18 @@ hy = [10, 90];
         }
       })
     );
+    root.querySelectorAll("[data-open]").forEach((b) =>
+      b.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        const i = Number(b.dataset.open);
+        this._openPanel = this._openPanel === i ? null : i;
+        rerender();
+      })
+    );
+    root.querySelector("[data-oclose]")?.addEventListener("click", () => {
+      this._openPanel = null;
+      rerender();
+    });
     root.querySelectorAll("[data-clim]").forEach((b) =>
       b.addEventListener("click", (ev) => {
         ev.stopPropagation();
@@ -2312,7 +2393,7 @@ hy = [10, 90];
     .wmsg{margin-top:8px;font-size:.85em;font-weight:600}.wmsg.ok{color:var(--ok)}.wmsg.bad{color:var(--alarm)}
     .clist{display:flex;flex-direction:column;gap:6px;margin-top:10px}
     .crow{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:12px;background:var(--card-bg)}
-    .crow .ic{color:var(--secondary-text-color)}.crow.heat .ic{color:var(--warn)}.crow.off{opacity:.55}
+    .crow .ic{color:var(--secondary-text-color)}.crow.heat .ic{color:var(--warn)}.crow.open .ic{color:var(--info)}.crow.off{opacity:.55}
     .cn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .cv{white-space:nowrap;font-size:.9em;color:var(--secondary-text-color)}.cv b{color:var(--primary-text-color)}
     .trend{font-size:.7em;margin-left:3px;font-weight:700;color:var(--secondary-text-color);vertical-align:super}
@@ -2518,7 +2599,8 @@ const ED_I18N = {
     icon: "Symbol (optional)",
     temperature: "Temperatur-Sensor",
     humidity: "Luftfeuchte-Sensor",
-    window: "Fenster-Sensor (optional)",
+    window: "Fenster-Sensoren (optional, mehrere möglich)",
+    door: "Außentüren – Terrasse/Balkon (optional, mehrere möglich)",
     co2: "CO₂-Sensor (optional)",
     wall_temperature: "Wandtemperatur-Sensor (optional)",
     mold: "Schimmel-Sensor (optional)",
@@ -2663,7 +2745,8 @@ const ED_I18N = {
     icon: "Icon (optional)",
     temperature: "Temperature sensor",
     humidity: "Humidity sensor",
-    window: "Window sensor (optional)",
+    window: "Window sensors (optional, several allowed)",
+    door: "Outside doors – terrace/balcony (optional, several allowed)",
     co2: "CO₂ sensor (optional)",
     wall_temperature: "Wall temperature sensor (optional)",
     mold: "Mold sensor (optional)",
@@ -2806,7 +2889,8 @@ class AuraClimateCardEditor extends HTMLElement {
       { type: "grid", name: "", schema: [{ name: "name", selector: { text: {} } }, { name: "icon", selector: { icon: {} } }] },
       ent("temperature", "sensor", "temperature"),
       ent("humidity", "sensor", "humidity"),
-      ent("window", "binary_sensor"),
+      { name: "window", selector: { entity: { domain: "binary_sensor", multiple: true } } },
+      { name: "door", selector: { entity: { domain: "binary_sensor", multiple: true } } },
       ent("co2", "sensor", "carbon_dioxide"),
       {
         type: "expandable",
@@ -2855,7 +2939,12 @@ class AuraClimateCardEditor extends HTMLElement {
 
   // ältere Konfigurationen: climate als Einzelwert → Liste für den Mehrfach-Picker
   _roomData(room) {
-    return room && room.climate !== undefined ? { ...room, climate: toList(room.climate) } : room;
+    if (!room) return room;
+    const d = { ...room };
+    ["climate", "window", "door"].forEach((k) => {
+      if (d[k] !== undefined) d[k] = toList(d[k]);
+    });
+    return d;
   }
 
   _generalData() {

@@ -41,7 +41,7 @@ blueprint:
           domain: sensor
           device_class: humidity
     windows:
-      name: Fenster-Sensoren (optional) / Window sensors
+      name: Fenster & Außentüren (optional) / Windows & outside doors
       default: []
       selector:
         entity:

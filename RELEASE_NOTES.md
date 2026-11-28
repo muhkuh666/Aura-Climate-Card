@@ -1,17 +1,17 @@
-## 🇬🇧 Aura Climate Card v2.1.0 – min / max values
+## 🇬🇧 Aura Climate Card v2.2.0 – several windows & doors
 
-- New section **Min / Max** per room: temperature, humidity, CO₂ and outdoor values
-- **24 h** with the time of the extreme and **all-time** with the exact date
-- All-time values come from Home Assistant's long-term statistics, which are kept forever (unlike the 10-day history); the date is refined to the day automatically
-- Sensors without `state_class` show "no long-term statistics"
-- Options: `show_minmax`, `minmax_alltime`, `minmax_outdoor` (editor: *Details & charts*)
+- `window` now accepts **one or several** window sensors, new option `door` for **outside doors** (terrace, balcony) – also several
+- Tile "Windows & doors · 1 of 3 open · 4 min"; tap opens the list of all windows and doors with state and duration
+- Ventilation advice, countdown, heat loss (all openings added up), CO₂ estimate and alarms use all openings
+- Notification blueprint: window input also takes outside doors
+- Existing configurations with a single window keep working
 
-## 🇩🇪 Aura Climate Card v2.1.0 – Min-/Max-Werte
+## 🇩🇪 Aura Climate Card v2.2.0 – mehrere Fenster & Türen
 
-- Neuer Bereich **Min / Max** pro Raum: Temperatur, Luftfeuchte, CO₂ und Außenwerte
-- **24 h** mit Uhrzeit des Extremwerts und **Allzeit** mit genauem Datum
-- Allzeit-Werte stammen aus der Langzeitstatistik von Home Assistant, die dauerhaft erhalten bleibt (anders als die 10-Tage-Historie); das Datum wird automatisch auf den Tag genau ermittelt
-- Sensoren ohne `state_class` zeigen „keine Langzeitstatistik“
-- Optionen: `show_minmax`, `minmax_alltime`, `minmax_outdoor` (Editor: *Details & Diagramme*)
+- `window` nimmt jetzt **einen oder mehrere** Fenstersensoren, neue Option `door` für **Außentüren** (Terrasse, Balkon) – ebenfalls mehrere
+- Kachel „Fenster & Türen · 1 von 3 offen · 4 min“; Tipp öffnet die Liste aller Fenster und Türen mit Zustand und Dauer
+- Lüftungsempfehlung, Countdown, Heizverlust (alle Öffnungen addiert), CO₂-Schätzung und Alarme berücksichtigen alle Öffnungen
+- Benachrichtigungs-Blueprint: Fenster-Eingabe nimmt auch Außentüren
+- Bestehende Konfigurationen mit einem Fenster funktionieren unverändert
 
 ☕ Gefällt dir die Karte? / Like the card? → [Buy Me a Coffee](https://buymeacoffee.com/muhkuh666)

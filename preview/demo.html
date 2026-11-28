@@ -21,7 +21,7 @@ const S = (id, state, attrs = {}, ago = 30) => [id, { entity_id: id, state: Stri
 const states = Object.fromEntries([
   S("sensor.aussen_temperatur", 3.5, { device_class: "temperature" }),
   S("sensor.aussen_feuchte", 88, { device_class: "humidity" }),
-  S("sensor.wz_temp", 21.4), S("sensor.wz_hum", 52), S("sensor.wz_co2", 820), S("binary_sensor.wz_fenster", "off"),
+  S("sensor.wz_temp", 21.4), S("sensor.wz_hum", 52), S("sensor.wz_co2", 820), S("binary_sensor.wz_fenster", "off", { friendly_name: "Fenster links" }), S("binary_sensor.wz_fenster2", "off", { friendly_name: "Fenster rechts" }, 200), S("binary_sensor.wz_terrasse", "on", { friendly_name: "Terrassentür" }, 4),
   S("climate.wohnzimmer", "heat", { temperature: 21.5, hvac_action: "idle" }),
   S("sensor.sz_temp", 17.6), S("sensor.sz_hum", 69), S("binary_sensor.sz_fenster", "off", {}, 360),
   S("sensor.bad_temp", 22.3), S("sensor.bad_hum", 76), S("binary_sensor.bad_fenster", "on", {}, 7),
@@ -88,7 +88,7 @@ const hass = {
 };
 const rooms = [
   { name: "Schlafzimmer", temperature: "sensor.sz_temp", humidity: "sensor.sz_hum", window: "binary_sensor.sz_fenster", volume: 32, persons: 2, dehumidifier: "switch.entfeuchter_sz" },
-  { name: "Wohnzimmer", temperature: "sensor.wz_temp", humidity: "sensor.wz_hum", co2: "sensor.wz_co2", voc: "sensor.wz_voc", pm25: "sensor.wz_pm25", window: "binary_sensor.wz_fenster", climate: "climate.wohnzimmer" },
+  { name: "Wohnzimmer", temperature: "sensor.wz_temp", humidity: "sensor.wz_hum", co2: "sensor.wz_co2", voc: "sensor.wz_voc", pm25: "sensor.wz_pm25", window: ["binary_sensor.wz_fenster", "binary_sensor.wz_fenster2"], door: "binary_sensor.wz_terrasse", climate: "climate.wohnzimmer" },
   { name: "Bad", temperature: "sensor.bad_temp", humidity: "sensor.bad_hum", window: "binary_sensor.bad_fenster" },
   { name: "Küche", temperature: "sensor.ku_temp", humidity: "sensor.ku_hum", pm25: "sensor.ku_pm25" },
   { name: "Keller", temperature: "sensor.keller_temp", humidity: "sensor.keller_hum", window: "binary_sensor.keller_fenster", room_type: "cellar" },
